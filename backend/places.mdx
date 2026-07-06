@@ -1,5 +1,5 @@
 ---
-title: "Places API: Location Data and Geospatial Indexing"
+title: "BuzzTrip Places API: Location Data and Geospatial Index"
 sidebarTitle: "Places"
 description: "BuzzTrip stores place data from Google Maps, Mapbox, and Foursquare. Places are deduplicated by lat/lng and indexed for geospatial queries."
 ---
@@ -62,8 +62,8 @@ On creation, two things happen automatically:
 <ParamField body="what3words" type="string">
   [what3words](https://what3words.com/) address for the location (e.g. `filled.count.soap`). Stored when available; not auto-generated.
 </ParamField>
-<ParamField body="photos" type="string[]">
-  Array of photo URL strings. Initially populated from the provider (Google Maps, Foursquare). Additional user-submitted photos are stored separately in the `place_photos` table.
+<ParamField body="photos" type="string[] | null | undefined">
+  Array of photo URL strings, or `null`/`undefined` if none are available. Initially populated from the provider (Google Maps, Foursquare). Additional user-submitted photos are stored separately in the `place_photos` table.
 </ParamField>
 <ParamField body="types" type="string[]">
   Array of POI type tags (e.g. `['restaurant', 'food', 'point_of_interest']`). Sourced from the map provider and used to derive the `icon` field.

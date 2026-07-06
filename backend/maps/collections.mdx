@@ -1,5 +1,5 @@
 ---
-title: "Collections API: Group and Organize Map Markers"
+title: "Collections API: Group and Organize Map Markers in BuzzTrip"
 sidebarTitle: "Collections"
 description: "Convex queries and mutations for managing marker collections. Collections group related markers and support custom icons and colors."
 ---
@@ -189,24 +189,24 @@ Updates an existing collection's metadata. Automatically stamps `updatedAt` with
 <ParamField path="collectionId" type="Id<'collections'>" required>
   The collection to update.
 </ParamField>
-<ParamField path="collection" type="Partial<collectionsEditSchema>" required>
-  Fields to update. All are optional.
+<ParamField path="collection" type="collectionsEditSchema" required>
+  The updated collection data. `map_id`, `title`, and `icon` are required; all other fields are optional.
 
-  <Expandable title="Updatable fields">
-    <ParamField path="collection.title" type="string">
+  <Expandable title="collection fields">
+    <ParamField path="collection.map_id" type="Id<'maps'>" required>
+      The map the collection belongs to.
+    </ParamField>
+    <ParamField path="collection.title" type="string" required>
       New display title.
+    </ParamField>
+    <ParamField path="collection.icon" type="IconType | string" required>
+      New icon identifier.
     </ParamField>
     <ParamField path="collection.description" type="string">
       New description.
     </ParamField>
-    <ParamField path="collection.icon" type="IconType | string">
-      New icon identifier.
-    </ParamField>
     <ParamField path="collection.color" type="string">
       New accent color.
-    </ParamField>
-    <ParamField path="collection.map_id" type="Id<'maps'>">
-      The map the collection belongs to.
     </ParamField>
   </Expandable>
 </ParamField>
@@ -223,7 +223,9 @@ const editCollection = useMutation(api.maps.collections.editCollection);
 const collectionId = await editCollection({
   collectionId: "collection_restaurants" as Id<"collections">,
   collection: {
+    map_id: "abc123" as Id<"maps">,
     title: "Best Restaurants",
+    icon: "Utensils",
     color: "#e63946",
   },
 });

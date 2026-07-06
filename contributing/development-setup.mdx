@@ -1,5 +1,5 @@
 ---
-title: "Set Up Your BuzzTrip Development Environment"
+title: "Set Up Your Local BuzzTrip Development Environment"
 sidebarTitle: "Dev Setup"
 description: "Step-by-step guide to running BuzzTrip locally for development, including all required services, environment variables, and dev commands."
 ---
@@ -83,8 +83,8 @@ Before cloning the repository, make sure you have the following installed and co
     | Variable | Required | Description |
     |---|---|---|
     | `NEXT_PUBLIC_CONVEX_URL` | ✅ | Your Convex deployment URL |
-    | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | Clerk frontend API key |
-    | `CLERK_SECRET_KEY` | ✅ | Clerk server-side secret key |
+    | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ❌ | Clerk frontend API key |
+    | `CLERK_SECRET_KEY` | ❌ | Clerk server-side secret key |
     | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | ✅ | Sign-in route (defaults to `/sign-in`) |
     | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | ✅ | Sign-up route (defaults to `/sign-up`) |
     | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | ✅ | Post-sign-in redirect (defaults to `/app`) |

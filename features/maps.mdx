@@ -1,5 +1,5 @@
 ---
-title: "Maps: Create and Manage Custom Map Projects"
+title: "Maps: Create and Manage Custom Map Projects in BuzzTrip"
 sidebarTitle: "Maps"
 description: "Create multiple custom maps with configurable visibility, map styles, and metadata. Duplicate existing maps and track views across your projects."
 ---
@@ -113,15 +113,21 @@ If none of those conditions are met, the duplication is rejected with a permissi
 
 ## Map Views
 
-BuzzTrip tracks map views for analytics via the `trackMapView` mutation. Each view record captures:
+BuzzTrip tracks map views for analytics via the `trackMapView` mutation. View history is queryable via `getMapViews` for maps you own, giving you insight into how often and from where your maps are being accessed.
 
-- IP address
-- Country and city
-- Browser name and version
-- Device type
-- Operating system
+Each view record captures the following fields:
 
-View history is queryable via `getMapViews` for maps you own, giving you insight into how often and from where your maps are being accessed.
+| Field | Description |
+|---|---|
+| `userId` | The authenticated user who viewed the map (optional — unset for anonymous views) |
+| `ip` | IP address of the viewer |
+| `country` | Country derived from the IP |
+| `region` | Region or state derived from the IP |
+| `city` | City derived from the IP |
+| `userAgent` | Raw user-agent string from the request |
+| `browser` | Parsed browser name |
+| `os` | Parsed operating system |
+| `device` | Parsed device type |
 
 ## Map Styles
 

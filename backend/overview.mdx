@@ -1,7 +1,7 @@
 ---
 title: "BuzzTrip Backend: Convex Real-Time API Reference"
 sidebarTitle: "Overview"
-description: "The BuzzTrip backend uses Convex for real-time queries and mutations. Learn how the API is organized, how authentication works, and how to use the generated API types."
+description: "BuzzTrip's Convex backend exposes typed queries and mutations for every map operation. Learn how auth, real-time subscriptions, and package exports work."
 ---
 
 The BuzzTrip backend is a [Convex](https://docs.convex.dev/) deployment that exposes fully-typed queries and mutations for every map and user operation in the platform. All schema definitions are validated with Zod at runtime via `convex-helpers`, so the same schemas that define the database tables are also used to validate inputs to every function. The `@buzztrip/backend` package bundles the generated API types, data model types, Zod schemas, and helper utilities so any app in the monorepo can import exactly what it needs without depending on the raw Convex internals.
@@ -19,7 +19,7 @@ The `@buzztrip/backend` package exposes the following entry points:
 </ResponseField>
 
 <ResponseField name="@buzztrip/backend/zod-schemas" type="module">
-  Zod validation schemas for all entities: maps, markers, collections, paths, places, routes, labels, users, and analytics. Both the base schemas (for inserts) and the edit schemas (all fields optional) are exported.
+  Zod validation schemas for all entities: maps, markers, collections, paths, places, labels, routes, users, and map views. Both the base schemas (for inserts) and the edit schemas (all fields optional) are exported.
 </ResponseField>
 
 <ResponseField name="@buzztrip/backend/types" type="module">
@@ -27,7 +27,7 @@ The `@buzztrip/backend` package exposes the following entry points:
 </ResponseField>
 
 <ResponseField name="@buzztrip/backend/helpers" type="module">
-  Utility functions shared across the monorepo. Includes the RBAC `canPerformAction` helper, `rolePermissions` map, and the `uppercaseFirstLetter` string utility.
+  Utility functions shared across the monorepo. Includes the RBAC `canPerformAction` helper and the `rolePermissions` map.
 </ResponseField>
 
 <ResponseField name="@buzztrip/backend/generateId" type="module">

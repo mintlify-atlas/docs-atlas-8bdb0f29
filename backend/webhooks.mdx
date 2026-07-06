@@ -1,5 +1,5 @@
 ---
-title: "Webhooks: Syncing Clerk Users to Convex"
+title: "Clerk Webhooks: Syncing User Events to Convex Backend"
 sidebarTitle: "Webhooks"
 description: "BuzzTrip uses a Clerk webhook to sync user data to Convex on user.created, user.updated, and user.deleted events. Setup and validation guide."
 ---
@@ -47,54 +47,68 @@ Incoming webhook requests are validated using the [Svix](https://svix.com/) libr
 If validation fails (missing headers, bad signature, replayed message), the handler returns HTTP `400` and no mutation is run. On success it returns HTTP `200`.
 
 ```typescript convex/http.ts
+import type { WebhookEvent } from "@clerk/backend";
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
 import { Webhook } from "svix";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import { httpAction } from "./_generated/server";
+
+function ensureEnvironmentVariable(name: string): string {
+  const value = process.env[name];
+  if (value === undefined) {
+    throw new Error(`missing environment variable ${name}`);
+  }
+  return value;
+}
+
+const webhookSecret = ensureEnvironmentVariable("CLERK_WEBHOOK_SECRET");
+
+const handleClerkWebhook = httpAction(async (ctx, request) => {
+  const event = await validateRequest(request);
+  if (!event) {
+    return new Response("Error occured", { status: 400 });
+  }
+  switch (event.type) {
+    case "user.created":
+      await ctx.runMutation(internal.users.createUser, { data: event.data });
+      break;
+    case "user.updated":
+      await ctx.runMutation(internal.users.updateUser, { data: event.data });
+      break;
+    case "user.deleted":
+      const id = event.data.id!;
+      await ctx.runMutation(internal.users.deleteUser, { id });
+      break;
+    default:
+      console.log("ignored Clerk webhook event", event.type);
+  }
+  return new Response(null, { status: 200 });
+});
 
 const http = httpRouter();
-
 http.route({
   path: "/clerk-users-webhook",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const event = await validateRequest(request);
-    if (!event) {
-      return new Response("Error occured", { status: 400 });
-    }
-
-    switch (event.type) {
-      case "user.created":
-        await ctx.runMutation(internal.users.createUser, { data: event.data });
-        break;
-      case "user.updated":
-        await ctx.runMutation(internal.users.updateUser, { data: event.data });
-        break;
-      case "user.deleted":
-        await ctx.runMutation(internal.users.deleteUser, { id: event.data.id! });
-        break;
-      default:
-        console.log("ignored Clerk webhook event", event.type);
-    }
-
-    return new Response(null, { status: 200 });
-  }),
+  handler: handleClerkWebhook,
 });
 
-async function validateRequest(req: Request) {
+async function validateRequest(req: Request): Promise<WebhookEvent | undefined> {
   const payloadString = await req.text();
   const svixHeaders = {
     "svix-id": req.headers.get("svix-id")!,
     "svix-timestamp": req.headers.get("svix-timestamp")!,
     "svix-signature": req.headers.get("svix-signature")!,
   };
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+  const wh = new Webhook(webhookSecret);
   try {
-    return wh.verify(payloadString, svixHeaders);
-  } catch {
+    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
+  } catch (_) {
+    console.log("error verifying");
     return undefined;
   }
 }
+
+export default http;
 ```
 
 <Warning>

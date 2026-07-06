@@ -1,5 +1,5 @@
 ---
-title: "Share and Collaborate on Maps in Real Time"
+title: "Share and Collaborate on BuzzTrip Maps in Real Time"
 sidebarTitle: "Sharing"
 description: "Invite collaborators to your maps with role-based permissions. Share via direct links or email invitation. Real-time edits sync instantly across all users."
 ---
@@ -30,12 +30,12 @@ Map visibility controls who can discover and access your map. Set it when creati
 
 Every user added to a map is assigned one of four roles from the `permissionEnum`:
 
-| Role | Update Map | Manage Content | Delete Map | Manage Users |
-|---|---|---|---|---|
-| **owner** | ✅ | ✅ | ✅ | ✅ (all users) |
-| **editor** | ✅ | ✅ | ❌ | ✅ (non-owners only) |
-| **viewer** | ❌ | ❌ | ❌ | ❌ |
-| **commenter** | ❌ | ❌ | ❌ | ❌ |
+| Role | Update Map | Manage Content | Delete Map | Add/Update Users | Remove Users |
+|---|---|---|---|---|---|
+| **owner** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **editor** | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **viewer** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **commenter** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 **Content management** covers creating, editing, and deleting markers, collections, collection links, labels, paths, routes, and route stops.
 
@@ -43,18 +43,19 @@ Every user added to a map is assigned one of four roles from the `permissionEnum
   **Owner**
   - Inherits all editor permissions
   - Can delete the map itself (`maps:delete`)
-  - Can remove any collaborator including other editors (`map_users:delete`)
+  - Can remove any collaborator (`map_users:delete`)
 
   **Editor**
   - Can update map metadata (`maps:update`)
-  - Can create and update `map_users` entries (but cannot delete the owner's entry)
+  - Can add new collaborators (`map_users:create`) and update their permission level (`map_users:update`)
+  - Cannot remove collaborators — the `map_users:delete` permission is not granted to editors
   - Can create, update, and delete: markers, collections, collection links, labels, paths, routes, route stops
 
   **Viewer**
-  - Read-only access. Cannot create, edit, or delete any content.
+  - No write permissions. Cannot create, edit, or delete any content.
 
   **Commenter**
-  - Read-only access. Commenting is a planned feature — this role is reserved for future use.
+  - No write permissions. The commenter role currently has no additional capabilities beyond read access.
 </Accordion>
 
 ## Inviting Collaborators

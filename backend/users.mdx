@@ -1,5 +1,5 @@
 ---
-title: "Users API: Queries, Auth Status, and Search"
+title: "BuzzTrip Users API: Queries, Auth Status, and Search"
 sidebarTitle: "Users"
 description: "Convex queries for user management, login status checking, and user search. Users are synced from Clerk via webhook on creation and update."
 ---
@@ -151,6 +151,9 @@ Called when Clerk fires a `user.deleted` event. Looks up the user by Clerk ID an
 </ResponseField>
 <ResponseField name="bio" type="string">
   Optional user bio.
+</ResponseField>
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of when the user record was first created. Optional — not always present on older records.
 </ResponseField>
 <ResponseField name="updatedAt" type="string">
   ISO 8601 timestamp of the last Clerk-triggered update.

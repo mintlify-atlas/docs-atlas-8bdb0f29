@@ -1,5 +1,5 @@
 ---
-title: "Collections: Organize Markers into Named Groups"
+title: "Collections: Organize Map Markers into Named Groups"
 sidebarTitle: "Collections"
 description: "Group related markers into collections with custom names, icons, and colors. Each map gets a Default Collection automatically when created."
 ---
@@ -32,7 +32,7 @@ Collections group markers together for easier navigation and visual organization
 
 Every map automatically receives a **Default Collection** at creation time. This happens inside `createMapFunction`, which calls `createCollectionFunction` as part of the same atomic operation that creates the map and registers the owner. The Default Collection uses the `"Folder"` icon and is owned by the map creator.
 
-New markers are added to the Default Collection unless you explicitly specify different collection IDs at creation time.
+To add a marker to the Default Collection (or any collection), pass the collection's ID in the `collectionIds` array when calling `createMarker`, or use `collectionIds_to_add` when editing an existing marker.
 
 ## Collection Links
 

@@ -1,7 +1,7 @@
 ---
 title: "BuzzTrip Architecture: Monorepo, Convex, and Next.js"
 sidebarTitle: "Architecture"
-description: "Understand how BuzzTrip is structured: a Turborepo monorepo with a Convex real-time backend, Next.js 15 frontend, Clerk authentication, and shared UI packages."
+description: "Understand how BuzzTrip is structured: a Turborepo monorepo with a Convex real-time backend, Next.js 15 frontend, Clerk auth, and shared UI packages."
 ---
 
 BuzzTrip is built as a **Turborepo monorepo** housing two Next.js 15 applications — the main web app and an admin dashboard — backed by a single shared Convex real-time backend. Shared UI components, email templates, and TypeScript configurations are extracted into dedicated packages that both apps consume. This document describes how all those pieces fit together.

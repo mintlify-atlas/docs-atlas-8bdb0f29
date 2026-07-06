@@ -1,7 +1,7 @@
 ---
 title: "BuzzTrip Database Schema: Tables, Indexes, and Types"
 sidebarTitle: "Schema"
-description: "Complete reference for all BuzzTrip Convex database tables, fields, indexes, and TypeScript types. Covers maps, markers, collections, places, users, and more."
+description: "Complete reference for BuzzTrip Convex database tables, fields, indexes, and TypeScript types. Covers maps, markers, collections, places, users, and more."
 ---
 
 BuzzTrip uses Convex as its database. All tables are defined in `packages/backend/convex/schema.ts` using Zod schemas converted to Convex validators via `zodToConvex`. Every document automatically receives `_id` (a unique `Id<tableName>`) and `_creationTime` (Unix timestamp in milliseconds).
@@ -26,13 +26,13 @@ The top-level container for a BuzzTrip map project.
 | `title` | `string` | ✓ | Map display name |
 | `description` | `string` | — | Optional description |
 | `image` | `string` | — | Cover image URL |
-| `icon` | `string` | — | Emoji or icon identifier |
+| `icon` | `IconType \| string \| null` | — | Emoji or icon identifier (nullish) |
 | `color` | `string` | — | Hex color string |
 | `owner_id` | `Id<'users'>` | ✓ | The user who owns the map |
 | `location_name` | `string` | — | Human-readable starting location (e.g. "Brisbane, Australia") |
 | `lat` | `number` | — | Starting latitude |
 | `lng` | `number` | — | Starting longitude |
-| `bounds` | `{lat: number, lng: number}` | — | Map viewport bounds |
+| `bounds` | `{east, north, south, west, offset?}` | — | Map viewport bounds (nullish) |
 | `visibility` | `'private' \| 'public' \| 'unlisted'` | ✓ | Access control |
 | `mapTypeId` | `'hybrid' \| 'roadmap' \| 'satellite' \| 'terrain'` | — | Map tile style |
 | `updatedAt` | `string` (ISO datetime) | — | Last update timestamp |
@@ -43,20 +43,20 @@ The top-level container for a BuzzTrip map project.
 
 ### `mapViews`
 
-Analytics tracking for map page views.
+Analytics tracking for map page views. All geo and device fields are optional.
 
-| Field | Type | Description |
-|---|---|---|
-| `mapId` | `Id<'maps'>` | The viewed map |
-| `userId` | `Id<'users'>` | Viewer (if authenticated) |
-| `ip` | `string` | Viewer IP address |
-| `country` | `string` | Country from Vercel geo headers |
-| `region` | `string` | Region/state |
-| `city` | `string` | City |
-| `userAgent` | `string` | Browser user agent |
-| `os` | `string` | Operating system |
-| `browser` | `string` | Browser name |
-| `device` | `'Mobile' \| 'Desktop'` | Device type |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `mapId` | `Id<'maps'>` | ✓ | The viewed map |
+| `userId` | `Id<'users'>` | — | Viewer (if authenticated) |
+| `ip` | `string` | — | Viewer IP address |
+| `country` | `string` | — | Country from geo headers |
+| `region` | `string` | — | Region/state |
+| `city` | `string` | — | City |
+| `userAgent` | `string` | — | Browser user agent |
+| `os` | `string` | — | Operating system |
+| `browser` | `string` | — | Browser name |
+| `device` | `string` | — | Device type |
 
 **Indexes:** `by_map_id`, `by_user_id`
 
@@ -87,7 +87,7 @@ Individual pinned locations on a map.
 | `lat` | `number` | ✓ | Latitude |
 | `lng` | `number` | ✓ | Longitude |
 | `created_by` | `Id<'users'>` | ✓ | Creator |
-| `icon` | `string` | ✓ | Icon identifier |
+| `icon` | `IconType \| string` | ✓ | Icon identifier |
 | `color` | `string` | ✓ | Hex color string |
 | `place_id` | `Id<'places'>` | ✓ | Linked place record |
 | `map_id` | `Id<'maps'>` | ✓ | Parent map |
@@ -107,7 +107,7 @@ Named groups for organizing markers.
 | `title` | `string` | ✓ | Collection name |
 | `description` | `string` | — | Optional description |
 | `created_by` | `Id<'users'>` | ✓ | Creator |
-| `icon` | `string` | ✓ | Icon identifier |
+| `icon` | `IconType \| string` | ✓ | Icon identifier |
 | `color` | `string` | — | Hex color string |
 | `updatedAt` | `string` | — | Last update timestamp |
 
@@ -139,7 +139,7 @@ Descriptive map overlays with icons and colors.
 | `map_id` | `Id<'maps'>` | ✓ | Parent map |
 | `title` | `string` | ✓ | Label text |
 | `description` | `string` | ✓ | Description |
-| `icon` | `string \| null` | — | Icon identifier |
+| `icon` | `IconType \| string \| null` | — | Icon identifier (nullish) |
 | `color` | `string` | — | Hex color |
 | `created_by` | `Id<'users'>` | ✓ | Creator |
 | `updatedAt` | `string` | — | Last update timestamp |
@@ -220,17 +220,17 @@ Canonical location data shared across markers.
 | `description` | `string` | — | Description |
 | `lat` | `number` | ✓ | Latitude |
 | `lng` | `number` | ✓ | Longitude |
-| `bounds` | `{lat: number, lng: number}` | ✓ | Bounding box |
+| `bounds` | `{east, north, south, west} \| {lat, lng}` | ✓ | Bounding box |
 | `address` | `string` | — | Street address |
 | `gm_place_id` | `string` | — | Google Maps place ID |
 | `mb_place_id` | `string` | — | Mapbox place ID |
 | `fq_place_id` | `string` | — | Foursquare place ID |
 | `plus_code` | `string` | — | Open Location Code (auto-generated) |
 | `what3words` | `string` | — | what3words address |
-| `icon` | `string` | ✓ | Icon derived from POI type |
-| `photos` | `string[]` | — | Photo URLs |
+| `icon` | `IconType \| string` | ✓ | Icon derived from POI type |
+| `photos` | `string[] \| null` | — | Photo URLs (nullish) |
 | `rating` | `number` | ✓ | Average rating |
-| `types` | `string[]` | — | POI category tags |
+| `types` | `string[] \| null` | — | POI category tags (nullish) |
 | `website` | `string` | — | Website URL |
 | `phone` | `string` | — | Phone number |
 
@@ -273,17 +273,19 @@ User-uploaded photos linked to places.
 
 BuzzTrip user profiles, synced from Clerk via webhook.
 
-| Field | Type | Description |
-|---|---|---|
-| `clerkUserId` | `string` | Clerk user ID |
-| `name` | `string` | Full name |
-| `first_name` | `string` | First name |
-| `last_name` | `string` | Last name |
-| `email` | `string` | Email address |
-| `username` | `string` | Username |
-| `image` | `string` | Avatar URL |
-| `updatedAt` | `string` | Last sync timestamp |
-| `isBetaUser` | `boolean` | Beta program access flag |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `clerkUserId` | `string` | ✓ | Clerk user ID |
+| `name` | `string` | ✓ | Full name |
+| `email` | `string` | ✓ | Email address |
+| `image` | `string` | ✓ | Avatar URL |
+| `updatedAt` | `string` | ✓ | Last sync timestamp |
+| `createdAt` | `string` | — | Account creation timestamp |
+| `first_name` | `string` | — | First name |
+| `last_name` | `string` | — | Last name |
+| `username` | `string` | — | Username |
+| `bio` | `string` | — | Profile bio |
+| `isBetaUser` | `boolean` | — | Beta program access flag |
 
 **Indexes:** `by_email`, `by_clerk_id`, `by_isBetaUser`
 
@@ -293,13 +295,24 @@ BuzzTrip user profiles, synced from Clerk via webhook.
 
 ### `beta_users`
 
-Beta program sign-up tracking.
+Beta program sign-up tracking. Stores the entire signup flow state, from initial email confirmation through questionnaire completion.
 
-| Field | Type | Description |
-|---|---|---|
-| `email` | `string` | Email address |
-| `token` | `string` | Unique verification token |
-| `userId` | `Id<'users'>` | Linked user (once verified) |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `email` | `string` | ✓ | Email address |
+| `firstName` | `string` | ✓ | First name |
+| `lastName` | `string \| null` | — | Last name (nullish) |
+| `token` | `string` | ✓ | Unique verification token |
+| `expiresAt` | `number` | ✓ | Token expiry (Unix ms) |
+| `emailConfirmed` | `boolean` | ✓ | Whether email has been confirmed |
+| `emailConfirmedAt` | `number` | — | Timestamp of email confirmation (Unix ms) |
+| `questionnaireCompleted` | `boolean` | ✓ | Whether the onboarding questionnaire is done |
+| `questionnaireCompletedAt` | `number` | — | Timestamp of questionnaire completion (Unix ms) |
+| `whatsappOptIn` | `boolean` | ✓ | WhatsApp notification opt-in |
+| `questionnaireResponses` | `Record<string, any>` | — | Raw questionnaire answers |
+| `userId` | `Id<'users'> \| null` | — | Linked user account once verified (nullish) |
+| `createdAt` | `number` | ✓ | Record creation timestamp (Unix ms) |
+| `updatedAt` | `number` | ✓ | Last update timestamp (Unix ms) |
 
 **Indexes:** `by_email`, `by_token`, `by_user_id`
 
@@ -315,17 +328,23 @@ import type {
   Marker, NewMarker, CombinedMarker,
   Place, NewPlace,
   Collection, NewCollection,
-  CollectionLink,
+  CollectionLink, NewCollectionLink,
   MapUser, NewMapUser, CombinedMapUser, ShareMapUser, UserMap,
   Label, NewLabel,
   Route, NewRoute,
   RouteStop, NewRouteStop,
   Path, NewPath,
   Bounds,
-  PermissionEnum,    // 'owner' | 'editor' | 'viewer' | 'commenter'
-  TravelTypeEnum,    // 'driving' | 'walking' | 'transit' | 'bicycling'
-  MapTypeId,         // 'hybrid' | 'roadmap' | 'satellite' | 'terrain'
+  Review,
+  RefinedUser,
+  PermissionEnum,           // 'owner' | 'editor' | 'viewer' | 'commenter'
+  TravelTypeEnum,           // 'driving' | 'walking' | 'transit' | 'bicycling'
+  MapTypeId,                // 'hybrid' | 'roadmap' | 'satellite' | 'terrain'
   Measurements,
+  CircleMeasurements,
+  RectangleMeasurements,
+  LineMeasurements,
+  PolygonMeasurements,
   PathStyle,
 } from '@buzztrip/backend/types';
 ```

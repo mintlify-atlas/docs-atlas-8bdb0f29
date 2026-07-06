@@ -1,5 +1,5 @@
 ---
-title: "Authentication in BuzzTrip with Clerk"
+title: "BuzzTrip User Authentication with Clerk and Convex"
 sidebarTitle: "Authentication"
 description: "BuzzTrip uses Clerk for user authentication, synced to Convex via webhooks. Learn how sign-up, sign-in, and session management work."
 ---
@@ -43,6 +43,7 @@ The `userSchema` (defined in `zod-schemas/auth-schema.ts`) describes every field
 | `username` | `string` (optional) | Clerk username, if set |
 | `image` | `string` | Profile image URL from Clerk (`image_url`) |
 | `updatedAt` | `string` | ISO timestamp of the last sync from Clerk |
+| `createdAt` | `string` (optional) | ISO timestamp when the user record was created |
 | `bio` | `string` (optional) | User-provided biography |
 | `isBetaUser` | `boolean` (optional) | Early-access flag — see note below |
 

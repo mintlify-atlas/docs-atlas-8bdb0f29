@@ -1,7 +1,7 @@
 ---
-title: "Self-Host BuzzTrip on Your Own Infrastructure"
+title: "Self-Hosting BuzzTrip: Setup and Configuration Guide"
 sidebarTitle: "Self-Hosting"
-description: "Run BuzzTrip locally or on your own server. Covers cloning the repo, installing dependencies, configuring environment variables, and starting the dev server."
+description: "Run your own BuzzTrip instance locally or in production. Covers repo setup, all required environment variables, and dev server commands."
 ---
 
 BuzzTrip is open source under the [AGPL-3.0 license](https://github.com/jacobsamo/BuzzTrip/blob/main/LICENCE), which means you are free to run it on your own infrastructure, inspect every line of code, and modify it to suit your needs. This guide covers everything from cloning the repository through to a running local development environment.
@@ -159,7 +159,7 @@ BuzzTrip uses a [Turborepo](https://turbo.build/) monorepo managed with Bun work
 
     1. In your **Clerk dashboard**, go to **Webhooks → Add Endpoint**.
     2. Set the endpoint URL to:
-       ```
+       ```text
        https://<your-convex-deployment-url>/clerk-users-webhook
        ```
        For local development you can use a tunneling tool such as [ngrok](https://ngrok.com/) or [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to expose your local Convex HTTP endpoint.
@@ -181,5 +181,5 @@ Once the dev server is running you can:
 
 - Visit [http://localhost:5173](http://localhost:5173) to see the landing page.
 - Sign up for an account — the Clerk webhook will create your user record in Convex.
-- Open the Convex dashboard (`npx convex dashboard` or via the web UI) to inspect live data, run queries, and monitor function calls.
+- Open the Convex dashboard (`bunx convex dashboard` or via the web UI) to inspect live data, run queries, and monitor function calls.
 - Review `/docs/architecture.md` in the repository for an in-depth explanation of the application structure and design patterns used across the codebase.

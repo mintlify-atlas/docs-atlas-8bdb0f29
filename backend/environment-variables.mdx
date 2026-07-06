@@ -1,5 +1,5 @@
 ---
-title: "Environment Variables Reference for BuzzTrip"
+title: "Environment Variables Reference Guide for BuzzTrip"
 sidebarTitle: "Env Variables"
 description: "Complete reference for all environment variables required to run BuzzTrip, including Convex, Clerk, Google Maps, Mapbox, and optional monitoring services."
 ---
@@ -24,14 +24,14 @@ BuzzTrip requires environment variables for authentication (Clerk), real-time da
   </Tab>
 
   <Tab title="Clerk">
-    <ParamField query="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" type="string" required>
-      Clerk publishable key. Safe to expose client-side. Found in your Clerk dashboard under **API Keys**.
+    <ParamField query="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" type="string">
+      Clerk publishable key. Safe to expose client-side. Found in your Clerk dashboard under **API Keys**. Marked optional in the schema — Clerk can also read this from the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable automatically.
 
       **Example:** `pk_test_...`
     </ParamField>
 
-    <ParamField query="CLERK_SECRET_KEY" type="string" required>
-      Clerk secret key. **Server-side only — never expose this in client code or commit it to source control.** Found alongside the publishable key in your Clerk dashboard.
+    <ParamField query="CLERK_SECRET_KEY" type="string">
+      Clerk secret key. **Server-side only — never expose this in client code or commit it to source control.** Found alongside the publishable key in your Clerk dashboard. Marked optional in the schema — required for server-side Clerk SDK calls.
 
       **Example:** `sk_test_...`
     </ParamField>
