@@ -1,0 +1,209 @@
+---
+title: "Places API: Location Data and Geospatial Indexing"
+sidebarTitle: "Places"
+description: "BuzzTrip stores place data from Google Maps, Mapbox, and Foursquare. Places are deduplicated by lat/lng and indexed for geospatial queries."
+---
+
+The `places` table is the canonical store for enriched location data in BuzzTrip. Every marker on a map links to a place record, which holds the coordinates, address, provider IDs, photos, ratings, and POI type information sourced from Google Maps, Mapbox, or Foursquare. Places are shared across maps — if two markers point to the same physical location, they reference the same place document.
+
+## How Places Work
+
+When a marker is created, BuzzTrip checks whether a place already exists at the target coordinates using the `by_place_lat_lng` compound index. If a matching place is found, the new marker links to it directly. If no match exists, a new place record is created first.
+
+On creation, two things happen automatically:
+
+1. **Plus code generation** — An [Open Location Code](https://maps.google.com/pluscodes/) is computed from the `lat`/`lng` values using the `open-location-code-typescript` library and stored in `plus_code`.
+2. **Geospatial indexing** — The place is inserted into BuzzTrip's `geospatial` Convex component with its coordinates and metadata (`placeTypes`, `plusCode`, `what3words`), enabling efficient radius and bounding-box queries.
+
+<Note>
+  Plus codes are generated automatically — you do not need to provide them when creating a place. If the library fails to encode the coordinates (e.g., for out-of-range values), `plus_code` will be `undefined` and the error is logged but does not prevent the place from being created.
+</Note>
+
+---
+
+## Place Schema
+
+<ParamField body="title" type="string" required>
+  Human-readable name for the place (e.g. "Eiffel Tower", "Blue Bottle Coffee").
+</ParamField>
+<ParamField body="lat" type="number" required>
+  Latitude in decimal degrees.
+</ParamField>
+<ParamField body="lng" type="number" required>
+  Longitude in decimal degrees.
+</ParamField>
+<ParamField body="bounds" type="BoundsSchema" required>
+  Bounding box for the place. Can be either a full `{ east, north, south, west }` object or a simple `{ lat, lng }` point.
+</ParamField>
+<ParamField body="icon" type="IconType | string" required>
+  An icon identifier derived from the primary POI type. Used to render the marker pin on the map.
+</ParamField>
+<ParamField body="rating" type="number" required>
+  Aggregate rating (e.g. from Google Maps or Foursquare). Defaults to `0` if no rating is available.
+</ParamField>
+<ParamField body="description" type="string">
+  Optional freeform description of the place.
+</ParamField>
+<ParamField body="address" type="string">
+  Formatted street address.
+</ParamField>
+<ParamField body="gm_place_id" type="string">
+  Google Maps place ID (e.g. `ChIJ...`). Used to cross-reference data with the Google Maps Places API.
+</ParamField>
+<ParamField body="mb_place_id" type="string">
+  Mapbox place ID. Used to cross-reference data with the Mapbox Geocoding API.
+</ParamField>
+<ParamField body="fq_place_id" type="string">
+  Foursquare place ID. Used to cross-reference data with the Foursquare Places API.
+</ParamField>
+<ParamField body="plus_code" type="string">
+  Open Location Code (Plus Code) auto-generated from `lat`/`lng`. Example: `8FW4V75V+8Q`. You do not need to supply this field.
+</ParamField>
+<ParamField body="what3words" type="string">
+  [what3words](https://what3words.com/) address for the location (e.g. `filled.count.soap`). Stored when available; not auto-generated.
+</ParamField>
+<ParamField body="photos" type="string[]">
+  Array of photo URL strings. Initially populated from the provider (Google Maps, Foursquare). Additional user-submitted photos are stored separately in the `place_photos` table.
+</ParamField>
+<ParamField body="types" type="string[]">
+  Array of POI type tags (e.g. `['restaurant', 'food', 'point_of_interest']`). Sourced from the map provider and used to derive the `icon` field.
+</ParamField>
+<ParamField body="website" type="string">
+  Official website URL for the place.
+</ParamField>
+<ParamField body="phone" type="string">
+  Phone number for the place.
+</ParamField>
+
+---
+
+## Place Deduplication
+
+Places are deduplicated using the `by_place_lat_lng` compound index on `(lat, lng)`. Before inserting a new place, BuzzTrip queries this index to check for an exact coordinate match. If one is found, the existing place ID is used for the new marker.
+
+This means a single place record can accumulate provider IDs over time — for example, a place first added via Google Maps might later have its `mb_place_id` or `fq_place_id` filled in when the same location is looked up via Mapbox or Foursquare.
+
+---
+
+## Multiple Provider IDs
+
+A single place document can hold IDs from all three supported map providers simultaneously:
+
+| Field | Provider |
+|---|---|
+| `gm_place_id` | Google Maps Places API |
+| `mb_place_id` | Mapbox Geocoding API |
+| `fq_place_id` | Foursquare Places API |
+
+This cross-provider design means place data can be enriched from multiple sources without creating duplicate records.
+
+---
+
+## `createPlace` (Internal Helper)
+
+`createPlace` is an internal async helper function (not a public Convex mutation) called during marker creation. It handles the full place insertion flow:
+
+1. Generates a plus code from `lat`/`lng` using `OpenLocationCode.encode()`
+2. Inserts the place document into the `places` table via `ctx.db.insert()`
+3. Registers the place in the geospatial index via `geospatial.insert()` with:
+   - Coordinates: `{ latitude, longitude }`
+   - Metadata: `{ placeTypes, plusCode, what3words }`
+
+```typescript
+// convex/places.ts (internal helper — not a public mutation)
+import OpenLocationCode from "open-location-code-typescript";
+import { geospatial } from "./helpers";
+
+export const createPlace = async (ctx: MutationCtx, place: NewPlace) => {
+  let plusCode: string | undefined = undefined;
+  try {
+    plusCode = OpenLocationCode.encode(place.lat, place.lng);
+  } catch (error) {
+    console.error(`Failed to generate plus code: ${error}`);
+  }
+
+  const newPlaceId = await ctx.db.insert("places", {
+    title: place.title,
+    lat: place.lat,
+    lng: place.lng,
+    bounds: place.bounds,
+    icon: place.icon,
+    rating: place.rating,
+    plus_code: plusCode,
+    // ...other fields
+  });
+
+  await geospatial.insert(
+    ctx,
+    newPlaceId,
+    { latitude: place.lat, longitude: place.lng },
+    {
+      placeTypes: place.types ?? null,
+      plusCode: plusCode ?? null,
+      what3words: null,
+    }
+  );
+
+  return newPlaceId;
+};
+```
+
+---
+
+## Reviews and Photos
+
+User-submitted content is stored in two separate tables linked to places by `place_id`:
+
+<CardGroup cols={2}>
+  <Card title="places_reviews" icon="star">
+    Stores user reviews for a place. Each review includes `author_name`, `author_url`, `profile_photo_url`, `rating`, and a `description`. Linked to both `places` (via `place_id`) and `users` (via `user_id`).
+  </Card>
+  <Card title="place_photos" icon="image">
+    Stores user-submitted photos for a place. Each photo record includes `photo_url`, `width`, `height`, and a `caption`. Linked to both `places` (via `place_id`) and `users` (via `user_id`).
+  </Card>
+</CardGroup>
+
+### `places_reviews` Schema
+
+<ResponseField name="place_id" type="Id<'places'>" required>
+  Reference to the parent place document.
+</ResponseField>
+<ResponseField name="user_id" type="Id<'users'>" required>
+  Reference to the user who submitted the review.
+</ResponseField>
+<ResponseField name="author_name" type="string" required>
+  Display name of the reviewer.
+</ResponseField>
+<ResponseField name="author_url" type="string | null" required>
+  Link to the author's profile (may be `null`).
+</ResponseField>
+<ResponseField name="profile_photo_url" type="string" required>
+  URL of the reviewer's avatar.
+</ResponseField>
+<ResponseField name="rating" type="number | null" required>
+  Numeric rating, or `null` if not provided.
+</ResponseField>
+<ResponseField name="description" type="string" required>
+  Review body text.
+</ResponseField>
+
+### `place_photos` Schema
+
+<ResponseField name="place_id" type="Id<'places'>" required>
+  Reference to the parent place document.
+</ResponseField>
+<ResponseField name="user_id" type="Id<'users'>" required>
+  Reference to the user who submitted the photo.
+</ResponseField>
+<ResponseField name="photo_url" type="string" required>
+  URL of the uploaded photo.
+</ResponseField>
+<ResponseField name="width" type="number" required>
+  Image width in pixels.
+</ResponseField>
+<ResponseField name="height" type="number" required>
+  Image height in pixels.
+</ResponseField>
+<ResponseField name="caption" type="string" required>
+  Text caption for the photo.
+</ResponseField>

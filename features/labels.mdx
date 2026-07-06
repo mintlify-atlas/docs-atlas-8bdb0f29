@@ -1,0 +1,87 @@
+---
+title: "Labels: Add Visual Annotations to Map Regions"
+sidebarTitle: "Labels"
+description: "Place descriptive labels on your map with custom icons, colors, titles, and descriptions to provide context for map viewers."
+---
+
+Labels add descriptive overlays to the map surface to provide context and aid navigation for anyone viewing the map. Unlike markers — which represent specific pinned locations linked to place data — labels are purely visual annotations. They are ideal for naming neighborhoods, identifying regions, marking boundaries, or highlighting areas of interest without pinning a specific geographic coordinate.
+
+## Label Properties
+
+<ParamField path="title" type="string" required>
+  The primary text displayed by the label on the map surface.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  A supporting description shown when the label is selected or previewed.
+</ParamField>
+
+<ParamField path="icon" type="icon">
+  An optional icon drawn from the `iconSchema`, displayed alongside the label text. Either `icon` or `color` (or both) must be provided — see the note below.
+</ParamField>
+
+<ParamField path="color" type="string">
+  An optional hex color used to style the label's visual appearance on the map. Either `icon` or `color` (or both) must be provided.
+</ParamField>
+
+<ParamField path="created_by" type="ID (users)" required>
+  A reference to the user who created the label. Automatically set to the authenticated user when calling `createLabel`.
+</ParamField>
+
+<Note>
+  Every label must have either an `icon`, a `color`, or both. A label with neither is rejected by schema validation with the message: _"Either icon or color must be provided."_ This is enforced by a `.refine()` rule on both `labelsSchema` and `labelsEditSchema`.
+</Note>
+
+## Use Cases
+
+Labels are well-suited for annotating broad areas or providing contextual information that does not belong to a single pinned location:
+
+<CardGroup cols={2}>
+  <Card title="Neighborhoods & Districts" icon="map">
+    Name areas of a city map — "Old Town", "Waterfront District", "Arts Quarter" — so viewers can orient themselves quickly.
+  </Card>
+  <Card title="Event Zones" icon="calendar">
+    Mark functional areas of an event venue — "Main Stage", "Food Court", "Parking", "VIP Area" — without cluttering the map with individual markers.
+  </Card>
+  <Card title="Geographic Regions" icon="globe">
+    Identify national parks, nature reserves, or administrative boundaries to provide geographic context alongside your markers and paths.
+  </Card>
+  <Card title="Photo Shoot Areas" icon="camera">
+    Annotate a location scouting map with zone names like "Golden Hour Spot" or "Wide Angle Setup" to communicate intent to your team.
+  </Card>
+</CardGroup>
+
+## Visual Appearance
+
+Labels appear as floating text or icon+text overlays anchored to a position on the map canvas. They render above the base map layer but do not obstruct interaction with markers or paths. The `color` field controls the label's accent color, and the `icon` field adds a visual glyph next to the title for quick recognition.
+
+## Creating Labels
+
+<Steps>
+  <Step title="Open the label tool">
+    In the map toolbar, select the label tool and click the position on the map where you want to anchor the label.
+  </Step>
+  <Step title="Fill in the details">
+    Enter a title and description. Choose an icon, a color, or both — at least one is required.
+  </Step>
+  <Step title="Save">
+    Click **Save**. BuzzTrip calls the `createLabel` mutation, which inserts the label record with `map_id` and `created_by` set automatically from context.
+  </Step>
+</Steps>
+
+## Editing and Deleting Labels
+
+- **Edit** — Call `editLabel` with the label ID and updated fields (`title`, `description`, `icon`, `color`). The `updatedAt` timestamp is refreshed automatically.
+- **Delete** — Call `deleteLabel` with the label ID to permanently remove the label from the map.
+
+## Labels vs. Markers
+
+| | Labels | Markers |
+|---|---|---|
+| **Purpose** | Descriptive area/region annotation | Pinned location with place data |
+| **Place linkage** | None | Linked to `places` table |
+| **POI data** | No | Yes (address, rating, photos, etc.) |
+| **Collections** | Not supported | Supported |
+| **Icon + Color** | At least one required | Both required |
+
+Use labels when you want to name or describe a region or zone. Use markers when you want to pin a specific location that a viewer might want to visit, navigate to, or learn more about.

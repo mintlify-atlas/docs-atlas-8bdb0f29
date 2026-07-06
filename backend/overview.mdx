@@ -1,0 +1,182 @@
+---
+title: "BuzzTrip Backend: Convex Real-Time API Reference"
+sidebarTitle: "Overview"
+description: "The BuzzTrip backend uses Convex for real-time queries and mutations. Learn how the API is organized, how authentication works, and how to use the generated API types."
+---
+
+The BuzzTrip backend is a [Convex](https://docs.convex.dev/) deployment that exposes fully-typed queries and mutations for every map and user operation in the platform. All schema definitions are validated with Zod at runtime via `convex-helpers`, so the same schemas that define the database tables are also used to validate inputs to every function. The `@buzztrip/backend` package bundles the generated API types, data model types, Zod schemas, and helper utilities so any app in the monorepo can import exactly what it needs without depending on the raw Convex internals.
+
+## Package exports
+
+The `@buzztrip/backend` package exposes the following entry points:
+
+<ResponseField name="@buzztrip/backend/api" type="module">
+  Generated Convex API types — the `api` object used to reference queries and mutations in client and server code. Import this wherever you call `useQuery`, `useMutation`, `fetchQuery`, or `preloadQuery`.
+</ResponseField>
+
+<ResponseField name="@buzztrip/backend/dataModel" type="module">
+  Generated data model types — includes `Doc<'tableName'>` and `Id<'tableName'>` helpers for every table in the schema. Use these when you want the full Convex document type (with `_id` and `_creationTime`) rather than the Zod-inferred type.
+</ResponseField>
+
+<ResponseField name="@buzztrip/backend/zod-schemas" type="module">
+  Zod validation schemas for all entities: maps, markers, collections, paths, places, routes, labels, users, and analytics. Both the base schemas (for inserts) and the edit schemas (all fields optional) are exported.
+</ResponseField>
+
+<ResponseField name="@buzztrip/backend/types" type="module">
+  TypeScript type exports inferred from the Zod schemas — `Map`, `Marker`, `Collection`, `Place`, `Path`, `Route`, `User`, and all their `New*` / `Combined*` variants. Import these when you need types without the full Zod runtime.
+</ResponseField>
+
+<ResponseField name="@buzztrip/backend/helpers" type="module">
+  Utility functions shared across the monorepo. Includes the RBAC `canPerformAction` helper, `rolePermissions` map, and the `uppercaseFirstLetter` string utility.
+</ResponseField>
+
+<ResponseField name="@buzztrip/backend/generateId" type="module">
+  ID generation utilities for creating document IDs outside of a Convex mutation context.
+</ResponseField>
+
+---
+
+## Calling Convex functions
+
+Convex functions can be called from server components, server actions, and client components. The calling pattern differs slightly depending on the rendering context.
+
+### From a Next.js server component
+
+Use `fetchQuery` for one-shot data fetching, or `preloadQuery` to stream data into a client component using the `Preloaded` pattern.
+
+```typescript
+import { api } from '@buzztrip/backend/api';
+import { fetchQuery, preloadQuery } from 'convex/nextjs';
+import { convexNextjsOptions } from '@/lib/auth';
+
+// Fetch data directly in a server component
+const options = await convexNextjsOptions();
+const map = await fetchQuery(
+  api.maps.index.getMap,
+  { mapId: 'your-map-id' },
+  options
+);
+
+// Or preload for a client component that needs real-time updates
+const preloadedMaps = await preloadQuery(
+  api.maps.index.getUserMaps,
+  { userId: session.user._id },
+  options
+);
+```
+
+<Note>
+  `convexNextjsOptions()` injects the authenticated session token from Clerk so that server-side Convex calls respect the same auth rules as client calls. Always pass `options` to `fetchQuery` and `preloadQuery` for authenticated requests.
+</Note>
+
+### From a client component
+
+Use the `useQuery` and `useMutation` React hooks from `convex/react`. These hooks integrate with the Convex WebSocket transport and automatically re-render the component whenever the underlying data changes — no polling required.
+
+```typescript
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@buzztrip/backend/api';
+
+// Reactive query — re-renders on server-side data changes
+const markers = useQuery(api.maps.markers.getMarkersView, { mapId });
+
+// Mutation — returns a stable function reference
+const createMarker = useMutation(api.maps.markers.createMarker);
+
+// Call the mutation
+await createMarker({
+  mapId,
+  marker: { title: 'New spot', lat: -27.47, lng: 153.02, /* ... */ },
+  collectionIds: [],
+});
+```
+
+---
+
+## Function naming convention
+
+Convex uses file-based routing: the path of a file inside `convex/` maps directly to its API reference on the `api` object. The table below shows the pattern:
+
+| File path | API reference prefix |
+|---|---|
+| `convex/maps/index.ts` | `api.maps.index` |
+| `convex/maps/markers.ts` | `api.maps.markers` |
+| `convex/maps/collections.ts` | `api.maps.collections` |
+| `convex/users.ts` | `api.users` |
+| `convex/places/index.ts` | `api.places.index` |
+
+So a function exported as `export const getMap = ...` from `convex/maps/index.ts` is called as `api.maps.index.getMap`.
+
+---
+
+## Authentication
+
+All user-facing Convex functions in BuzzTrip are wrapped with either `authedQuery` or `authedMutation`, both defined in `convex/helpers.ts`. These wrappers:
+
+1. Retrieve the Clerk identity from `ctx.auth.getUserIdentity()`
+2. Look up the corresponding `users` document by `clerkUserId`
+3. Inject the full user document as `ctx.user`
+4. **Throw an `"Unauthorized"` error** if no valid identity is found
+
+```typescript
+import { authedQuery, authedMutation } from '../helpers';
+
+// ctx.user is guaranteed to be non-null inside the handler
+export const getMap = authedQuery({
+  args: { mapId: zid('maps') },
+  handler: async (ctx, args) => {
+    // ctx.user is the authenticated user document
+    return await ctx.db.get(args.mapId);
+  },
+});
+```
+
+<Warning>
+  Functions using `authedQuery` or `authedMutation` will throw if called without a valid Clerk session. Unauthenticated public endpoints (e.g. viewing a public map) use the `zodQuery` / `zodMutation` wrappers instead.
+</Warning>
+
+---
+
+## Real-time subscriptions
+
+One of Convex's key features is that `useQuery` hooks are **live queries** — the Convex server pushes updates to all connected clients the moment any mutation changes data that the query depends on. This means:
+
+- No manual polling or cache invalidation needed
+- Collaborative edits (multiple users on the same map) are reflected instantly for all participants
+- Optimistic UI can be layered on top using `useMutation`'s built-in optimistic update API
+
+```typescript
+// This component re-renders automatically whenever any marker on the map changes,
+// whether the change was made by the current user or a collaborator.
+function MarkerList({ mapId }: { mapId: string }) {
+  const markers = useQuery(api.maps.markers.getMarkersView, { mapId });
+
+  if (markers === undefined) return <Skeleton />;
+  return <ul>{markers.map(m => <li key={m._id}>{m.title}</li>)}</ul>;
+}
+```
+
+---
+
+## Explore the backend
+
+<CardGroup cols={2}>
+  <Card title="Schema" icon="database" href="/backend/schema">
+    All database tables, fields, indexes, and TypeScript types.
+  </Card>
+  <Card title="Maps API" icon="map" href="/backend/maps/maps">
+    Queries and mutations for maps, markers, and collections.
+  </Card>
+  <Card title="Users API" icon="user" href="/backend/users">
+    User profile management and Clerk integration.
+  </Card>
+  <Card title="Places API" icon="location-dot" href="/backend/places">
+    Shared places database, reviews, and photos.
+  </Card>
+  <Card title="Environment Variables" icon="key" href="/backend/environment-variables">
+    Required Convex and Clerk configuration variables.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/backend/webhooks">
+    Clerk and Svix webhook handlers for user sync.
+  </Card>
+</CardGroup>

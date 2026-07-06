@@ -1,0 +1,219 @@
+---
+title: "Labels API: Add Descriptive Overlays to Maps"
+sidebarTitle: "Labels"
+description: "Convex queries and mutations for managing map labels. Labels are visual annotations with custom icons and colors placed on the map surface."
+---
+
+Labels are lightweight visual annotations placed directly on the map surface. Unlike markers, labels are not tied to a `places` record — they are purely decorative overlays with a title, a description, and an optional icon or color that controls how they appear on the map.
+
+Every label must have either an `icon` or a `color` (or both). Providing neither will fail schema validation.
+
+All operations require authentication via the `authedQuery` / `authedMutation` wrappers.
+
+---
+
+## getMapLabels
+
+Returns all labels belonging to a map.
+
+**API path:** `api.maps.labels.getMapLabels`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose labels should be returned.
+</ParamField>
+
+**Returns:** `Label[] | null`
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'labels'>">
+    Unique label document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) when the label was created.
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The map this label belongs to.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Display title of the label.
+  </ResponseField>
+  <ResponseField name="description" type="string">
+    Description text shown with the label.
+  </ResponseField>
+  <ResponseField name="icon" type="IconType | string | null | undefined">
+    Optional icon identifier. At least one of `icon` or `color` must be non-null.
+  </ResponseField>
+  <ResponseField name="color" type="string | undefined">
+    Optional accent color. At least one of `icon` or `color` must be provided.
+  </ResponseField>
+  <ResponseField name="created_by" type="Id<'users'>">
+    User who created the label.
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string | undefined">
+    ISO 8601 datetime of the last update.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const labels = useQuery(api.maps.labels.getMapLabels, { mapId });
+
+labels?.forEach((label) => {
+  console.log(label.title, label.icon, label.color);
+});
+```
+
+---
+
+## createLabel
+
+Creates a new label on a map. The `map_id` and `created_by` fields are injected automatically — `map_id` from the `mapId` argument and `created_by` from the authenticated user's context.
+
+<Warning>
+  The label will fail to insert if both `icon` and `color` are `null` or `undefined`. Ensure at least one of these fields carries a value.
+</Warning>
+
+**API path:** `api.maps.labels.createLabel`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map to place this label on. Automatically written to `label.map_id`.
+</ParamField>
+<ParamField path="label" type="labelsEditSchema" required>
+  The label data to insert.
+
+  <Expandable title="label fields">
+    <ParamField path="label.title" type="string" required>
+      Display title of the label.
+    </ParamField>
+    <ParamField path="label.description" type="string" required>
+      Description text shown with the label.
+    </ParamField>
+    <ParamField path="label.icon" type="IconType | string | null">
+      Icon identifier. Required if `color` is not provided.
+    </ParamField>
+    <ParamField path="label.color" type="string">
+      Accent color. Required if `icon` is not provided.
+    </ParamField>
+    <ParamField path="label.updatedAt" type="string">
+      Optional ISO 8601 datetime string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createLabel = useMutation(api.maps.labels.createLabel);
+
+// Label with an icon
+await createLabel({
+  mapId: "abc123" as Id<"maps">,
+  label: {
+    title: "Historic District",
+    description: "UNESCO-listed area with preserved Edo-period architecture",
+    icon: "Landmark",
+    color: "#f4a261",
+  },
+});
+
+// Label with a color only
+await createLabel({
+  mapId: "abc123" as Id<"maps">,
+  label: {
+    title: "No-Go Zone",
+    description: "Construction underway, avoid during trip",
+    color: "#e63946",
+  },
+});
+```
+
+---
+
+## editLabel
+
+Updates an existing label's `title`, `description`, `icon`, and `color` fields. Always stamps `updatedAt` with the current ISO datetime.
+
+<Warning>
+  The same validation applies on edit: both `icon` and `color` cannot simultaneously be `null`. Pass at least one non-null value.
+</Warning>
+
+**API path:** `api.maps.labels.editLabel`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="labelId" type="Id<'labels'>" required>
+  The label to update.
+</ParamField>
+<ParamField path="label" type="labelsEditSchema" required>
+  The updated label data. All four content fields (`title`, `description`, `icon`, `color`) are written on every edit call.
+
+  <Expandable title="label fields">
+    <ParamField path="label.title" type="string" required>
+      Updated title.
+    </ParamField>
+    <ParamField path="label.description" type="string" required>
+      Updated description.
+    </ParamField>
+    <ParamField path="label.icon" type="IconType | string | null">
+      Updated icon. Must be non-null if `color` is not provided.
+    </ParamField>
+    <ParamField path="label.color" type="string">
+      Updated color. Must be provided if `icon` is null.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const editLabel = useMutation(api.maps.labels.editLabel);
+
+await editLabel({
+  labelId: "label_xyz" as Id<"labels">,
+  label: {
+    title: "Historic District (updated)",
+    description: "Restored in 2024 — now open to visitors again",
+    icon: "Landmark",
+    color: "#2a9d8f",
+  },
+});
+```
+
+---
+
+## deleteLabel
+
+Permanently deletes a label document.
+
+**API path:** `api.maps.labels.deleteLabel`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="labelId" type="Id<'labels'>" required>
+  The document ID of the label to delete.
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const deleteLabel = useMutation(api.maps.labels.deleteLabel);
+
+await deleteLabel({ labelId: "label_xyz" as Id<"labels"> });
+```

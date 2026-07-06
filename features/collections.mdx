@@ -1,0 +1,78 @@
+---
+title: "Collections: Organize Markers into Named Groups"
+sidebarTitle: "Collections"
+description: "Group related markers into collections with custom names, icons, and colors. Each map gets a Default Collection automatically when created."
+---
+
+Collections group markers together for easier navigation and visual organization. Instead of scrolling through every marker on a busy map, you can browse and toggle collections to focus on only the locations relevant to a particular theme, category, or trip leg. A single marker can belong to multiple collections, giving you flexible cross-cutting organization without duplication.
+
+## Collection Properties
+
+<ParamField path="title" type="string" required>
+  The display name of the collection shown in the sidebar and on any collection-related UI.
+</ParamField>
+
+<ParamField path="description" type="string">
+  An optional description providing more context about what the collection represents.
+</ParamField>
+
+<ParamField path="icon" type="icon" required>
+  A visual icon for the collection, drawn from the `iconSchema`. For example, the Default Collection uses the `"Folder"` icon.
+</ParamField>
+
+<ParamField path="color" type="string">
+  An optional hex color used to visually distinguish the collection in the sidebar and on marker pins that belong to it.
+</ParamField>
+
+<ParamField path="created_by" type="ID (users)" required>
+  A reference to the user who created the collection.
+</ParamField>
+
+## Default Collection
+
+Every map automatically receives a **Default Collection** at creation time. This happens inside `createMapFunction`, which calls `createCollectionFunction` as part of the same atomic operation that creates the map and registers the owner. The Default Collection uses the `"Folder"` icon and is owned by the map creator.
+
+New markers are added to the Default Collection unless you explicitly specify different collection IDs at creation time.
+
+## Collection Links
+
+Collections and markers have a **many-to-many** relationship managed through the `collection_links` table. Each row in `collection_links` stores:
+
+- `collection_id` — the collection the marker belongs to
+- `marker_id` — the marker being linked
+- `map_id` — the map both records belong to
+- `user_id` — the user who created the link
+
+This design means a single marker can appear in multiple collections simultaneously, and collections can contain overlapping sets of markers.
+
+<Note>
+  A marker can belong to more than one collection at the same time. Use this to create overlapping groupings — for example, a hotel might appear in both a "Accommodation" collection and a "City Centre" collection.
+</Note>
+
+## Managing Collections
+
+<Steps>
+  <Step title="Create a collection">
+    In the map sidebar, click **Add Collection** and provide a title, optional description, icon, and color. The `createCollection` mutation inserts the new record and associates it with the current map.
+  </Step>
+  <Step title="Edit a collection">
+    Click the edit icon next to any collection to update its title, description, icon, or color. Changes are applied via the `editCollection` mutation and `updatedAt` is refreshed automatically.
+  </Step>
+  <Step title="Add markers to a collection">
+    Open a marker's detail panel and assign it to one or more collections, or pass `collectionIds_to_add` when calling `editMarker`.
+  </Step>
+  <Step title="Remove markers from a collection">
+    Pass `collectionIds_to_remove` when editing a marker. The corresponding `collection_links` record is deleted; the marker itself remains on the map.
+  </Step>
+  <Step title="Delete a collection">
+    Click **Delete** on a collection. The `deleteCollection` mutation removes the collection record. **Markers in the collection are not deleted** — they remain on the map, but the `collection_links` records that referenced this collection are orphaned, so you should reassign affected markers beforehand.
+  </Step>
+</Steps>
+
+## Visual Organization
+
+Collections appear as expandable groups in the map sidebar. You can:
+
+- **Toggle visibility** — show or hide all markers belonging to a collection with a single click
+- **Browse by group** — click a collection to see only its markers listed, making it easy to jump between locations in a themed group
+- **Color-code** — assign distinct colors to collections so their markers are visually differentiated on the map canvas

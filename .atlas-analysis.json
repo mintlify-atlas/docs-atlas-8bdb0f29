@@ -1,0 +1,136 @@
+{
+  "projectType": "saas",
+  "projectName": "BuzzTrip",
+  "projectDescription": "BuzzTrip is a collaborative custom mapping platform that lets users create, customize, and share maps with markers, collections, paths, and real-time collaboration — a powerful alternative to Google My Maps.",
+  "theme": "almond",
+  "primaryColor": "#2d8983",
+  "lightColor": "#e8f5f4",
+  "darkColor": "#1a5552",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/maps",
+              "features/markers",
+              "features/collections",
+              "features/paths",
+              "features/labels",
+              "features/sharing"
+            ]
+          },
+          {
+            "group": "Account & Access",
+            "pages": [
+              "account/authentication",
+              "account/permissions",
+              "account/pricing"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/development-setup",
+              "contributing/architecture"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Backend Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "backend/overview",
+              "backend/schema"
+            ]
+          },
+          {
+            "group": "Maps API",
+            "pages": [
+              "backend/maps/maps",
+              "backend/maps/markers",
+              "backend/maps/collections",
+              "backend/maps/paths",
+              "backend/maps/labels"
+            ]
+          },
+          {
+            "group": "Users & Places",
+            "pages": [
+              "backend/users",
+              "backend/places"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "backend/environment-variables",
+              "backend/webhooks"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Create and manage multiple custom maps with configurable visibility (private, public, unlisted)",
+    "Add custom markers anywhere on the map with icons, colors, notes, and place data",
+    "Organize markers into collections with custom icons and colors",
+    "Draw paths and shapes (lines, circles, rectangles, polygons) with real-time measurements",
+    "Add visual labels with custom icons and colors to map regions",
+    "Real-time collaborative editing with role-based permissions (owner, editor, viewer, commenter)",
+    "Share maps via links or invite specific users with granular permission levels",
+    "Duplicate entire maps including all markers, collections, paths, and routes",
+    "Multiple map styles: hybrid, roadmap, satellite, terrain",
+    "Integrated place data from Google Maps, Mapbox, and Foursquare",
+    "Route planning with multi-stop support and travel type selection (driving, walking, transit, bicycling)"
+  ],
+  "publicApiSurface": [
+    "api.maps.index.getMap",
+    "api.maps.index.getUserMaps",
+    "api.maps.index.createMap",
+    "api.maps.index.updateMap",
+    "api.maps.index.deleteMap",
+    "api.maps.index.duplicateMap",
+    "api.maps.index.trackMapView",
+    "api.maps.markers.getMarkersView",
+    "api.maps.markers.createMarker",
+    "api.maps.markers.editMarker",
+    "api.maps.markers.deleteMarker",
+    "api.maps.collections.getCollectionsForMap",
+    "api.maps.collections.createCollection",
+    "api.maps.collections.editCollection",
+    "api.maps.collections.deleteCollection",
+    "api.maps.paths.getPathsForMap",
+    "api.maps.paths.createPath",
+    "api.maps.paths.editPath",
+    "api.maps.paths.deletePath",
+    "api.maps.labels.getMapLabels",
+    "api.maps.labels.createLabel",
+    "api.maps.labels.editLabel",
+    "api.maps.labels.deleteLabel",
+    "api.maps.mapUsers.getMapUsers",
+    "api.maps.mapUsers.getCombinedMapUsers",
+    "api.maps.mapUsers.shareMap",
+    "api.maps.mapUsers.editMapUser",
+    "api.maps.mapUsers.deleteMapUser",
+    "api.users.currentUser",
+    "api.users.searchUsers",
+    "api.users.userLoginStatus",
+    "HTTP POST /clerk-users-webhook"
+  ]
+}

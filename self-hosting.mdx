@@ -1,0 +1,185 @@
+---
+title: "Self-Host BuzzTrip on Your Own Infrastructure"
+sidebarTitle: "Self-Hosting"
+description: "Run BuzzTrip locally or on your own server. Covers cloning the repo, installing dependencies, configuring environment variables, and starting the dev server."
+---
+
+BuzzTrip is open source under the [AGPL-3.0 license](https://github.com/jacobsamo/BuzzTrip/blob/main/LICENCE), which means you are free to run it on your own infrastructure, inspect every line of code, and modify it to suit your needs. This guide covers everything from cloning the repository through to a running local development environment.
+
+<Warning>
+  Self-hosting BuzzTrip requires your own Convex and Clerk accounts. Both offer free tiers suitable for development and small deployments. Additionally, the AGPL-3.0 license requires that any modifications you make to BuzzTrip and deploy publicly must also be released as open source under the same license.
+</Warning>
+
+## Prerequisites
+
+Make sure you have the following before starting:
+
+- **Node.js 18.x** or later
+- **Bun** package manager — [install guide](https://bun.sh/)
+- **Convex account** — [convex.dev](https://convex.dev) (free tier available) — provides the real-time backend database
+- **Clerk account** — [clerk.com](https://clerk.com) (free tier available) — provides authentication
+- **Google Maps API key** and a **Map ID** — [Google Cloud Console](https://console.cloud.google.com/)
+- **Mapbox access token** — [mapbox.com](https://www.mapbox.com/) (free tier available)
+
+## Monorepo Structure
+
+BuzzTrip uses a [Turborepo](https://turbo.build/) monorepo managed with Bun workspaces. The key packages are:
+
+| Directory | Contents |
+|---|---|
+| `apps/web` | Main Next.js 15 web application (landing pages + map editor) |
+| `apps/admin` | Internal admin dashboard (Next.js) |
+| `packages/backend` | Convex backend — schemas, queries, mutations, and HTTP handlers |
+| `packages/ui` | Shared React component library (ShadcnUI + Tailwind) |
+| `packages/transactional` | Email templates (React Email + Resend) |
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/jacobsamo/BuzzTrip.git
+    cd buzztrip
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Bun installs dependencies for all workspaces in one command:
+
+    ```bash
+    bun install
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env.local` file inside `apps/web/` and populate it with the variables below. All values marked **required** must be present for the app to start; optional variables enable monitoring and billing features.
+
+    #### Convex
+
+    | Variable | Description |
+    |---|---|
+    | `NEXT_PUBLIC_CONVEX_URL` | Your Convex deployment URL, found in the Convex dashboard under **Settings → URL & Deploy Key**. |
+
+    #### Clerk
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Publishable key from your Clerk application dashboard. |
+    | `CLERK_SECRET_KEY` | — | Secret key from your Clerk application dashboard. Keep this server-side only. |
+    | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/sign-in` | Path to the sign-in page. |
+    | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/sign-up` | Path to the sign-up page. |
+    | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/app` | Where to send users after signing in if no `redirect_url` param is present. |
+    | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/app` | Where to send users after signing up if no `redirect_url` param is present. |
+
+    #### Google Maps
+
+    | Variable | Description |
+    |---|---|
+    | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key with the **Maps JavaScript API** and **Places API** enabled. |
+    | `NEXT_PUBLIC_GOOGLE_MAPS_MAPID` | Map ID from the Google Cloud Console **Map Management** section, used for cloud-based map styling. |
+
+    #### Mapbox
+
+    | Variable | Description |
+    |---|---|
+    | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Public access token from your Mapbox account dashboard. |
+
+    #### Email (Resend)
+
+    | Variable | Description |
+    |---|---|
+    | `RESEND_API_KEY` | API key from [resend.com](https://resend.com) used for transactional emails (invitations, notifications). |
+
+    #### Billing (Polar)
+
+    | Variable | Description |
+    |---|---|
+    | `POLAR_ACCESS_TOKEN` | Access token from [polar.sh](https://polar.sh) for subscription billing. |
+
+    #### Optional — Monitoring
+
+    | Variable | Description |
+    |---|---|
+    | `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN for frontend error tracking. |
+    | `SENTRY_AUTH_TOKEN` | Sentry auth token for source-map uploads at build time. |
+    | `SENTRY_ORG` | Your Sentry organization slug. |
+    | `SENTRY_PROJECT` | Your Sentry project slug. |
+    | `NEXT_PUBLIC_POSTHOG_KEY` | PostHog project API key for product analytics. |
+    | `NEXT_PUBLIC_POSTHOG_HOST` | PostHog instance URL (defaults to `https://app.posthog.com` if using PostHog Cloud). |
+
+    A minimal `.env.local` for local development looks like this:
+
+    ```bash
+    # Convex
+    NEXT_PUBLIC_CONVEX_URL=https://<your-deployment>.convex.cloud
+
+    # Clerk
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+    CLERK_SECRET_KEY=sk_test_...
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+    NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+    NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+    NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
+
+    # Google Maps
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
+    NEXT_PUBLIC_GOOGLE_MAPS_MAPID=<your-map-id>
+
+    # Mapbox
+    NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=pk.eyJ1...
+
+    # Email
+    RESEND_API_KEY=re_...
+
+    # Billing
+    POLAR_ACCESS_TOKEN=polar_...
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    Run all apps and the Convex backend together:
+
+    ```bash
+    bun dev
+    ```
+
+    Or run only the subset you need:
+
+    ```bash
+    # Web app (apps/web) + Convex backend (packages/backend)
+    bun dev:web
+
+    # Admin dashboard (apps/admin) + Convex backend (packages/backend)
+    bun dev:admin
+    ```
+
+    The web app starts on **http://localhost:5173** by default. Convex will prompt you to log in and select or create a deployment on the first run.
+  </Step>
+
+  <Step title="Configure the Clerk webhook">
+    BuzzTrip syncs Clerk user data into Convex via a webhook. Without this step, new sign-ups will not create a user record in the database.
+
+    1. In your **Clerk dashboard**, go to **Webhooks → Add Endpoint**.
+    2. Set the endpoint URL to:
+       ```
+       https://<your-convex-deployment-url>/clerk-users-webhook
+       ```
+       For local development you can use a tunneling tool such as [ngrok](https://ngrok.com/) or [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to expose your local Convex HTTP endpoint.
+    3. Subscribe to the following events: `user.created`, `user.updated`, `user.deleted`.
+    4. Copy the **Signing Secret** that Clerk generates for the endpoint.
+    5. In your **Convex dashboard**, go to **Settings → Environment Variables** and add:
+
+       | Variable | Value |
+       |---|---|
+       | `CLERK_WEBHOOK_SECRET` | The signing secret copied from Clerk |
+
+    Convex will automatically redeploy with the new variable. New user sign-ups and profile updates will now sync into the `users` table in real time.
+  </Step>
+</Steps>
+
+## Next Steps
+
+Once the dev server is running you can:
+
+- Visit [http://localhost:5173](http://localhost:5173) to see the landing page.
+- Sign up for an account — the Clerk webhook will create your user record in Convex.
+- Open the Convex dashboard (`npx convex dashboard` or via the web UI) to inspect live data, run queries, and monitor function calls.
+- Review `/docs/architecture.md` in the repository for an in-depth explanation of the application structure and design patterns used across the codebase.

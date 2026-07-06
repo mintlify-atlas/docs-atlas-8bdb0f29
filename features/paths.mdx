@@ -1,0 +1,147 @@
+---
+title: "Paths and Shapes: Draw on Your Map with Measurements"
+sidebarTitle: "Paths"
+description: "Draw lines, circles, rectangles, and polygons on your maps. BuzzTrip calculates real-time distance, area, perimeter, radius, width, and height measurements."
+---
+
+Paths let you draw geometric shapes directly onto the map surface. Whether you are tracing a hiking trail, outlining an event venue, or sketching a photo-shoot zone, BuzzTrip calculates live measurements as you draw — giving you instant feedback on distance, area, perimeter, and more. All paths are stored in the `paths` table and associated with a specific map.
+
+## Path Types
+
+BuzzTrip supports five path types, defined by the `pathTypeEnum`:
+
+<CardGroup cols={3}>
+  <Card title="Line" icon="minus">
+    A polyline connecting two or more points. Useful for trails, roads, or any linear route.
+  </Card>
+  <Card title="Circle" icon="circle">
+    A circular shape defined by a center point and radius. Good for marking coverage areas or zones.
+  </Card>
+  <Card title="Rectangle" icon="square">
+    An axis-aligned rectangle defined by its corner points. Ideal for bounding boxes and venue footprints.
+  </Card>
+  <Card title="Polygon" icon="pentagon">
+    A closed shape with any number of vertices. Use it for irregular boundaries, neighborhoods, or custom regions.
+  </Card>
+  <Card title="Text" icon="type">
+    A text annotation anchored to a position on the map.
+  </Card>
+</CardGroup>
+
+## Path Properties
+
+<ParamField path="pathType" type="string" required>
+  The shape type. One of `text`, `circle`, `rectangle`, `polygon`, or `line`.
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  A display name for the path shown in the sidebar.
+</ParamField>
+
+<ParamField path="note" type="string">
+  An optional free-text note describing the path.
+</ParamField>
+
+<ParamField path="points" type="Position | Position[] | Position[][]" required>
+  The geometric data of the shape. The structure varies by shape type — see [Position Format](#position-format) below.
+</ParamField>
+
+<ParamField path="measurements" type="object">
+  Auto-calculated measurement data. The fields present depend on the path type — see [Measurements](#measurements) below.
+</ParamField>
+
+<ParamField path="styles" type="object">
+  Visual styling options for the path. See [Path Styles](#path-styles) below.
+</ParamField>
+
+<ParamField path="createdBy" type="ID (users)" required>
+  A reference to the user who created the path. Automatically set to the authenticated user when calling `createPath`.
+</ParamField>
+
+## Position Format
+
+Positions are stored as coordinate tuples. BuzzTrip follows the GeoJSON convention of **longitude first, then latitude**:
+
+```ts
+// 2D position
+type Position2D = [longitude: number, latitude: number]
+
+// 3D position (with optional altitude)
+type Position3D = [longitude: number, latitude: number, altitude: number]
+```
+
+The `points` field on a path accepts one of three structures depending on the shape:
+
+| Structure | Used for |
+|---|---|
+| `[lng, lat]` or `[lng, lat, alt]` | Single-point shapes (e.g. `text`, `circle` center) |
+| `Position[]` | Multi-point lines |
+| `Position[][]` | Closed polygons and complex shapes |
+
+## Measurements
+
+BuzzTrip automatically computes measurements based on the path type. Measurement values are stored in the `measurements` field.
+
+<Tabs>
+  <Tab title="Circle">
+    | Field | Description |
+    |---|---|
+    | `perimeter` | Circumference of the circle |
+    | `area` | Area enclosed by the circle |
+    | `radius` | Distance from center to edge |
+    | `diameter` | Full width across the circle (2× radius) |
+  </Tab>
+  <Tab title="Rectangle">
+    | Field | Description |
+    |---|---|
+    | `perimeter` | Total length of all four sides |
+    | `area` | Area enclosed by the rectangle |
+    | `width` | Horizontal extent |
+    | `height` | Vertical extent |
+  </Tab>
+  <Tab title="Line">
+    | Field | Description |
+    |---|---|
+    | `perimeter` | Total length of the line (sum of all segments) |
+  </Tab>
+  <Tab title="Polygon">
+    | Field | Description |
+    |---|---|
+    | `perimeter` | Total length of the polygon boundary |
+    | `area` | Area enclosed by the polygon |
+  </Tab>
+</Tabs>
+
+## Path Styles
+
+Customize the appearance of any path using the `styles` object:
+
+<ParamField path="styles.strokeColor" type="string" required>
+  Hex color for the path outline or line stroke.
+</ParamField>
+
+<ParamField path="styles.strokeOpacity" type="number">
+  Opacity of the stroke, from `0.0` (transparent) to `1.0` (fully opaque).
+</ParamField>
+
+<ParamField path="styles.strokeWidth" type="number">
+  Width of the stroke line in pixels.
+</ParamField>
+
+<ParamField path="styles.fillColor" type="string">
+  Hex fill color for closed shapes (circle, rectangle, polygon). Not applicable to lines.
+</ParamField>
+
+<ParamField path="styles.fillOpacity" type="number">
+  Opacity of the fill, from `0.0` (transparent) to `1.0` (fully opaque).
+</ParamField>
+
+## Creating and Editing Paths
+
+- **Create** — Call `createPath` with the path type, title, points, and optional measurements and styles. The `createdBy` field is automatically set to the authenticated user's ID.
+- **Edit** — Call `editPath` with the path ID and any updated fields. The `updatedAt` timestamp is refreshed automatically.
+- **Delete** — Call `deletePath` with the path ID to permanently remove the path from the map.
+
+<Tip>
+  Use paths to outline event venues, sketch hiking trails, or mark photo-shoot zones. Combine a polygon path for the boundary with markers inside it for individual points of interest — the polygon's area measurement gives you instant size context.
+</Tip>

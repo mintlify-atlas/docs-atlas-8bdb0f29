@@ -1,72 +1,101 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "BuzzTrip",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
-  },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "primary": "#2d8983",
+    "light": "#e8f5f4",
+    "dark": "#1a5552"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/jacobsamo/buzztrip"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/jacobsamo/buzztrip"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/maps",
+              "features/markers",
+              "features/collections",
+              "features/paths",
+              "features/labels",
+              "features/sharing"
+            ]
+          },
+          {
+            "group": "Account & Access",
+            "pages": [
+              "account/authentication",
+              "account/permissions",
+              "account/pricing"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/development-setup",
+              "contributing/architecture"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Backend Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "backend/overview",
+              "backend/schema"
+            ]
+          },
+          {
+            "group": "Maps API",
+            "pages": [
+              "backend/maps/maps",
+              "backend/maps/markers",
+              "backend/maps/collections",
+              "backend/maps/paths",
+              "backend/maps/labels"
+            ]
+          },
+          {
+            "group": "Users & Places",
+            "pages": [
+              "backend/users",
+              "backend/places"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "backend/environment-variables",
+              "backend/webhooks"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

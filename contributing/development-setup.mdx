@@ -1,0 +1,181 @@
+---
+title: "Set Up Your BuzzTrip Development Environment"
+sidebarTitle: "Dev Setup"
+description: "Step-by-step guide to running BuzzTrip locally for development, including all required services, environment variables, and dev commands."
+---
+
+Setting up BuzzTrip locally requires a handful of external services alongside the source code. BuzzTrip is a Turborepo monorepo, so a single `bun install` at the root installs dependencies for all apps and packages at once — but you will need accounts for Convex (real-time backend), Clerk (authentication), Google Maps, and Mapbox before the app will run fully.
+
+<Warning>
+  Always read the `/docs/` folder inside the repository before making changes.
+  Check existing patterns and conventions before adding new files or
+  implementing features.
+</Warning>
+
+## Prerequisites
+
+Before cloning the repository, make sure you have the following installed and configured:
+
+- **Node.js 18.x or higher** — an `.nvmrc` file is included in the repo root for version pinning with `nvm`
+- **Bun** — the project's package manager and runtime. Install from [bun.sh](https://bun.sh)
+- **Git**
+- **Convex account** — free tier available at [convex.dev](https://convex.dev)
+- **Clerk account** — free tier available at [clerk.com](https://clerk.com)
+- **Google Maps API key** — requires the **Maps JavaScript API** enabled in the [Google Cloud Console](https://console.cloud.google.com)
+- **Mapbox access token** — from your [Mapbox account dashboard](https://account.mapbox.com)
+
+## Setup Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone BuzzTrip from GitHub and navigate into the project root:
+
+    ```bash
+    git clone https://github.com/jacobsamo/BuzzTrip.git
+    cd buzztrip
+    ```
+  </Step>
+
+  <Step title="Install all dependencies">
+    Run a single install from the monorepo root. Bun workspaces will install dependencies for every app and package automatically:
+
+    ```bash
+    bun install
+    ```
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create a `.env.local` file inside `apps/web/`. All variables are validated at startup via `@t3-oss/env-nextjs` — the app will fail to start if required values are missing.
+
+    ```env apps/web/.env.local
+    # Convex
+    NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+
+    # Clerk
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+    CLERK_SECRET_KEY=sk_test_...
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+    NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+    NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+    NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
+
+    # Google Maps
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
+    NEXT_PUBLIC_GOOGLE_MAPS_MAPID=your-map-id
+
+    # Mapbox
+    NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=pk.eyJ1...
+
+    # Email (Resend)
+    RESEND_API_KEY=re_...
+
+    # Billing (Polar)
+    POLAR_ACCESS_TOKEN=polar_...
+
+    # Optional: Error monitoring (Sentry)
+    NEXT_PUBLIC_SENTRY_DSN=https://...
+
+    # Optional: Product analytics (PostHog)
+    NEXT_PUBLIC_POSTHOG_KEY=phc_...
+    NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+    ```
+
+    | Variable | Required | Description |
+    |---|---|---|
+    | `NEXT_PUBLIC_CONVEX_URL` | ✅ | Your Convex deployment URL |
+    | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | Clerk frontend API key |
+    | `CLERK_SECRET_KEY` | ✅ | Clerk server-side secret key |
+    | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | ✅ | Sign-in route (defaults to `/sign-in`) |
+    | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | ✅ | Sign-up route (defaults to `/sign-up`) |
+    | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | ✅ | Post-sign-in redirect (defaults to `/app`) |
+    | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | ✅ | Post-sign-up redirect (defaults to `/app`) |
+    | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | ✅ | Google Maps JavaScript API key |
+    | `NEXT_PUBLIC_GOOGLE_MAPS_MAPID` | ✅ | Google Maps map ID for styled maps |
+    | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | ✅ | Mapbox public access token |
+    | `RESEND_API_KEY` | ✅ | Resend API key for transactional email |
+    | `POLAR_ACCESS_TOKEN` | ✅ | Polar access token for billing |
+    | `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry DSN for error monitoring |
+    | `NEXT_PUBLIC_POSTHOG_KEY` | ❌ | PostHog project API key |
+    | `NEXT_PUBLIC_POSTHOG_HOST` | ❌ | PostHog ingest host |
+  </Step>
+
+  <Step title="Configure Convex">
+    The Convex backend lives in `packages/backend`. Run the Convex dev CLI to link the package to your Convex project:
+
+    ```bash
+    cd packages/backend
+    bunx convex dev
+    ```
+
+    Follow the interactive prompts to log in and select or create a Convex deployment. Once linked, the CLI will print your `NEXT_PUBLIC_CONVEX_URL` — copy that into your `apps/web/.env.local`.
+
+    You also need to set the **Clerk webhook secret** as a Convex environment variable so that user sync events work correctly:
+
+    1. In your Clerk dashboard, create a webhook pointing to `https://<your-convex-deployment>.convex.site/clerk-users-webhook`
+    2. Copy the **Signing Secret** from Clerk
+    3. In the Convex dashboard (or via `bunx convex env set`), add:
+       ```
+       CLERK_WEBHOOK_SECRET=whsec_...
+       ```
+  </Step>
+
+  <Step title="Start the dev server">
+    Return to the monorepo root and start the dev servers. Choose the command that matches what you are working on:
+
+    ```bash
+    bun dev         # runs web app + admin dashboard + backend
+    bun dev:web     # runs web app + backend only
+    bun dev:admin   # runs admin dashboard + backend only
+    ```
+
+    The web app runs on **port 5173** by default (`http://localhost:5173`).
+  </Step>
+</Steps>
+
+## Useful Commands
+
+| Command | Description |
+|---|---|
+| `bun dev` | Start all apps and the Convex backend in watch mode |
+| `bun dev:web` | Start `@buzztrip/web` and `@buzztrip/backend` only |
+| `bun dev:admin` | Start `@buzztrip/admin` and `@buzztrip/backend` only |
+| `bun build` | Build all apps and packages via Turborepo |
+| `bun lint` | Run ESLint across all packages + `sherif` for monorepo dependency checks |
+| `bun format` | Run Prettier on all `.js`, `.ts`, `.md`, and `.mdx` files |
+| `bun clean:all` | Remove all build artifacts and `node_modules` |
+
+## Monorepo Structure
+
+BuzzTrip is organised as a Turborepo monorepo. Here is a high-level map of the repository:
+
+```
+buzztrip/
+├── apps/
+│   ├── web/          # Main Next.js app — landing pages + map application
+│   └── admin/        # Admin dashboard — read-only, requires admin role
+├── packages/
+│   ├── backend/      # Convex backend — schema, queries, mutations, types
+│   ├── ui/           # Shared shadcn/ui component library (@buzztrip/ui)
+│   ├── transactional/# React Email transactional email templates
+│   └── tsconfig/     # Shared TypeScript configurations
+└── docs/             # In-repo documentation (read before making changes)
+```
+
+<CardGroup cols={2}>
+  <Card title="apps/web/" icon="globe">
+    The primary Next.js 15 application. Contains both the public-facing landing
+    pages and the authenticated map editor at `/app`.
+  </Card>
+  <Card title="apps/admin/" icon="shield">
+    A separate Next.js 15 admin dashboard. Read-only interface for managing
+    users and maps; access requires the `admin` role in Clerk.
+  </Card>
+  <Card title="packages/backend/" icon="database">
+    The Convex backend package. All database schema, server functions (queries,
+    mutations, actions), HTTP routes, and generated types live here.
+  </Card>
+  <Card title="packages/ui/" icon="palette">
+    The shared component library built on shadcn/ui and Tailwind CSS v4. Import
+    components from `@buzztrip/ui` in any app.
+  </Card>
+</CardGroup>

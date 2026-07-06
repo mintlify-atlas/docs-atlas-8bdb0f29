@@ -1,0 +1,290 @@
+---
+title: "Users API: Queries, Auth Status, and Search"
+sidebarTitle: "Users"
+description: "Convex queries for user management, login status checking, and user search. Users are synced from Clerk via webhook on creation and update."
+---
+
+User records in BuzzTrip are created and managed via Clerk webhooks and exposed through Convex queries. When a user signs up through Clerk, the `user.created` webhook fires and calls an internal Convex mutation that creates the user document, sends a welcome email, and bootstraps a default "Main map". All subsequent profile changes in Clerk are reflected in Convex via the `user.updated` event.
+
+## Public Queries
+
+### `currentUser`
+
+Returns the Convex user document for the currently authenticated session, or `null` if no session is active. This query does not require authentication — it simply returns `null` when no JWT token is present.
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const user = useQuery(api.users.currentUser);
+// Returns Doc<"users"> | null
+```
+
+---
+
+### `getUser`
+
+Fetches a user record by their Clerk user ID (`subject` on the JWT identity).
+
+<ParamField query="subject" type="string" required>
+  The Clerk user ID (e.g. `user_2abc...`). This is the `sub` claim on the Clerk JWT and is referred to as `subject` in Convex auth.
+</ParamField>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const user = useQuery(api.users.getUser, { subject: "user_2abc123" });
+```
+
+---
+
+### `userLoginStatus`
+
+Checks the full login state of the current visitor, including whether their Clerk identity has been synced to Convex via webhook. This is useful for handling the brief window between a user completing OAuth and the webhook delivering their record.
+
+**Return type** — one of three possible states:
+
+<ResponseField name="message" type='"No JWT Token" | "No Clerk User" | "Logged In"'>
+  Describes the current authentication state.
+</ResponseField>
+<ResponseField name="user" type="Doc<'users'> | null">
+  The Convex user document when fully logged in; `null` otherwise.
+</ResponseField>
+
+| `message` | Meaning |
+|---|---|
+| `"No JWT Token"` | No active Clerk session — user has not started login |
+| `"No Clerk User"` | Clerk session exists, but the webhook hasn't delivered the user record yet |
+| `"Logged In"` | Session is active and user record exists in Convex |
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const status = useQuery(api.users.userLoginStatus);
+
+if (status?.message === "Logged In") {
+  console.log("Welcome,", status.user.name);
+} else if (status?.message === "No Clerk User") {
+  // Webhook is still in flight — show a loading state
+}
+```
+
+<Note>
+  `userLoginStatus` is the recommended way to gate app content on full readiness. Using `currentUser` alone can return `null` momentarily for new sign-ups while the webhook is still processing.
+</Note>
+
+---
+
+### `searchUsers`
+
+Full-text search across all users by name. Requires an authenticated session (`authedQuery`).
+
+<ParamField query="query" type="string" required>
+  The search string. Must be at least 1 character. Matched against the `name` field via Convex's `search_user` search index.
+</ParamField>
+
+Returns an array of `refinedUserSchema` objects. The refined schema omits sensitive fields and includes only: `_id`, `email`, `username`, `first_name`, `last_name`, `name`, and `image`.
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const results = useQuery(api.users.searchUsers, { query: "Alice" });
+// Returns Array<{ _id, email, username, first_name, last_name, name, image }> | null
+```
+
+---
+
+## Internal Mutations (Webhook-Driven)
+
+These mutations are `internalMutation` functions — they cannot be called from client code. They are invoked exclusively by the Clerk webhook handler in `convex/http.ts`. See the [Webhooks](/backend/webhooks) page for setup instructions.
+
+### `createUser`
+
+Called when Clerk fires a `user.created` event. Extracts user fields from the Clerk `UserJSON` payload, inserts a new document into the `users` table, and in parallel:
+
+- Sends a welcome email via `internal.emails.sendWelcomeEmail`
+- Creates a default map titled **"Main map"** with description _"The starting point to the next adventure!"_
+
+Throws if a user with the same Clerk ID already exists.
+
+---
+
+### `updateUser`
+
+Called when Clerk fires a `user.updated` event. Re-extracts user fields from the updated `UserJSON` payload and patches the existing user document. Throws if the user record does not exist.
+
+Fields patched: `clerkUserId`, `name`, `first_name`, `last_name`, `email`, `username`, `image`, `updatedAt`.
+
+---
+
+### `deleteUser`
+
+Called when Clerk fires a `user.deleted` event. Looks up the user by Clerk ID and deletes the document. Logs a warning (and skips) if no matching record is found.
+
+---
+
+## User Schema
+
+<ResponseField name="clerkUserId" type="string" required>
+  The Clerk user ID. Used as the primary foreign key to link Convex records to Clerk identities. Indexed via `by_clerk_id`.
+</ResponseField>
+<ResponseField name="name" type="string" required>
+  Full display name, concatenated from `first_name` and `last_name`.
+</ResponseField>
+<ResponseField name="email" type="string" required>
+  Primary email address sourced from Clerk.
+</ResponseField>
+<ResponseField name="image" type="string" required>
+  Profile image URL from Clerk (typically the OAuth provider avatar).
+</ResponseField>
+<ResponseField name="first_name" type="string">
+  First name, if provided.
+</ResponseField>
+<ResponseField name="last_name" type="string">
+  Last name, if provided.
+</ResponseField>
+<ResponseField name="username" type="string">
+  Clerk username, if configured.
+</ResponseField>
+<ResponseField name="bio" type="string">
+  Optional user bio.
+</ResponseField>
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp of the last Clerk-triggered update.
+</ResponseField>
+<ResponseField name="isBetaUser" type="boolean">
+  Whether the user has been granted beta program access. See note below.
+</ResponseField>
+
+<Note>
+  The `isBetaUser` flag is used for quick permission checks without joining the `beta_users` table. It is set when a user is admitted to the BuzzTrip beta program. Features gated behind this flag will return errors for users where `isBetaUser` is `false` or `undefined`.
+</Note>
+
+---
+
+## Map Users (Sharing)
+
+Map sharing is managed through the `map_users` join table, which links a user to a map with a specific permission level. The following functions live in `convex/maps/mapUsers.ts`.
+
+### Permission Levels
+
+| Permission | Description |
+|---|---|
+| `owner` | Full control — can delete the map, manage all users |
+| `editor` | Can add, edit, and remove markers, collections, and routes |
+| `commenter` | Can add comments and notes |
+| `viewer` | Read-only access |
+
+---
+
+### `getMapUsers`
+
+Returns all `map_users` records for a given map. Requires authentication.
+
+<ParamField query="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map.
+</ParamField>
+
+Returns `mapUserSchema[]` — each record contains `_id`, `map_id`, `user_id`, and `permission`.
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const mapUsers = useQuery(api.maps.mapUsers.getMapUsers, { mapId });
+```
+
+---
+
+### `getCombinedMapUsers`
+
+Returns map user records merged with full user details. Useful for rendering a collaborator list with names and avatars.
+
+<ParamField query="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map.
+</ParamField>
+
+Returns `combinedMapUser[]` — each element is a `map_users` document extended with a nested `user` object containing the user's profile fields.
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const collaborators = useQuery(api.maps.mapUsers.getCombinedMapUsers, { mapId });
+
+collaborators?.forEach(({ user, permission }) => {
+  console.log(`${user.name} — ${permission}`);
+});
+```
+
+---
+
+### `shareMap`
+
+Adds one or more users to a map. Existing map users are automatically skipped — this mutation is safe to call with a full user list without creating duplicates.
+
+<ParamField body="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map to share.
+</ParamField>
+<ParamField body="users" type="Array<{ user_id: Id<'users'>, permission: Permission }>">
+  Array of users to add. Each entry requires a `user_id` and a `permission` level. Users already on the map are filtered out before insertion.
+</ParamField>
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const shareMap = useMutation(api.maps.mapUsers.shareMap);
+
+await shareMap({
+  mapId,
+  users: [
+    { user_id: "users_abc123", permission: "editor" },
+    { user_id: "users_def456", permission: "viewer" },
+  ],
+});
+```
+
+---
+
+### `editMapUser`
+
+Updates the permission level for an existing map user.
+
+<ParamField body="mapUserEditSchema" type="mapUserEditSchema" required>
+  An object matching `mapUserEditSchema`: requires `_id` (the `map_users` document ID) and `permission` (the new permission level). All other fields are optional.
+</ParamField>
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const editMapUser = useMutation(api.maps.mapUsers.editMapUser);
+
+await editMapUser({ _id: mapUserId, permission: "viewer" });
+```
+
+---
+
+### `deleteMapUser`
+
+Removes a user from a map entirely.
+
+<ParamField body="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map.
+</ParamField>
+<ParamField body="mapUserId" type="Id<'map_users'>" required>
+  The Convex document ID of the `map_users` record to delete.
+</ParamField>
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const deleteMapUser = useMutation(api.maps.mapUsers.deleteMapUser);
+
+await deleteMapUser({ mapId, mapUserId });
+```

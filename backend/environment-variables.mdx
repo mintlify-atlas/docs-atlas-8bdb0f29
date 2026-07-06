@@ -1,0 +1,195 @@
+---
+title: "Environment Variables Reference for BuzzTrip"
+sidebarTitle: "Env Variables"
+description: "Complete reference for all environment variables required to run BuzzTrip, including Convex, Clerk, Google Maps, Mapbox, and optional monitoring services."
+---
+
+BuzzTrip requires environment variables for authentication (Clerk), real-time data (Convex), map providers (Google Maps and Mapbox), transactional email (Resend), and billing (Polar). Optional monitoring variables enable error tracking via Sentry and product analytics via PostHog. Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser; all others are server-only.
+
+<Warning>
+  Never commit your `.env.local` file. Add it to `.gitignore` — it is already excluded in the BuzzTrip repository. Exposing `CLERK_SECRET_KEY` or `RESEND_API_KEY` in a public repository will compromise your account.
+</Warning>
+
+---
+
+## Required Variables
+
+<Tabs>
+  <Tab title="Convex">
+    <ParamField query="NEXT_PUBLIC_CONVEX_URL" type="string" required>
+      Your Convex deployment URL. Exposed to the browser. Found in the Convex dashboard under your deployment's **Settings** tab.
+
+      **Example:** `https://happy-animal-123.convex.cloud`
+    </ParamField>
+  </Tab>
+
+  <Tab title="Clerk">
+    <ParamField query="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" type="string" required>
+      Clerk publishable key. Safe to expose client-side. Found in your Clerk dashboard under **API Keys**.
+
+      **Example:** `pk_test_...`
+    </ParamField>
+
+    <ParamField query="CLERK_SECRET_KEY" type="string" required>
+      Clerk secret key. **Server-side only — never expose this in client code or commit it to source control.** Found alongside the publishable key in your Clerk dashboard.
+
+      **Example:** `sk_test_...`
+    </ParamField>
+
+    <ParamField query="NEXT_PUBLIC_CLERK_SIGN_IN_URL" type="string" required>
+      The path Clerk redirects to for sign-in. Must match the route where your `<SignIn />` component is mounted.
+
+      **Default:** `/sign-in`
+    </ParamField>
+
+    <ParamField query="NEXT_PUBLIC_CLERK_SIGN_UP_URL" type="string" required>
+      The path Clerk redirects to for sign-up. Must match the route where your `<SignUp />` component is mounted.
+
+      **Default:** `/sign-up`
+    </ParamField>
+
+    <ParamField query="NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL" type="string" required>
+      The URL users are sent to after a successful sign-in when no explicit `redirect_url` is present.
+
+      **Default:** `/app`
+    </ParamField>
+
+    <ParamField query="NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL" type="string" required>
+      The URL users are sent to after a successful sign-up when no explicit `redirect_url` is present.
+
+      **Default:** `/app`
+    </ParamField>
+  </Tab>
+
+  <Tab title="Google Maps">
+    <ParamField query="NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" type="string" required>
+      Google Maps JavaScript API key. Must have the **Maps JavaScript API** and **Places API** enabled in the Google Cloud Console.
+
+      **Example:** `AIzaSy...`
+    </ParamField>
+
+    <ParamField query="NEXT_PUBLIC_GOOGLE_MAPS_MAPID" type="string" required>
+      Google Maps Map ID used for custom map styling via Cloud-based map styling. Create one in the Google Cloud Console under **Google Maps Platform → Map Management**.
+
+      **Example:** `a1b2c3d4e5f6...`
+    </ParamField>
+  </Tab>
+
+  <Tab title="Mapbox">
+    <ParamField query="NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN" type="string" required>
+      Mapbox access token used for alternative map tile rendering and geocoding. Create one in your [Mapbox account](https://account.mapbox.com/access-tokens/).
+
+      **Example:** `pk.eyJ1IjoieW91cnVzZXJuYW1lIi...`
+    </ParamField>
+  </Tab>
+
+  <Tab title="Email & Billing">
+    <ParamField query="RESEND_API_KEY" type="string" required>
+      [Resend](https://resend.com/) API key for transactional emails, including welcome emails sent on user sign-up. Create one in your Resend dashboard.
+
+      **Example:** `re_...`
+    </ParamField>
+
+    <ParamField query="POLAR_ACCESS_TOKEN" type="string" required>
+      [Polar](https://polar.sh/) access token for subscription and billing management. Generate one in your Polar dashboard under **Settings → Access Tokens**.
+
+      **Example:** `polar_...`
+    </ParamField>
+  </Tab>
+</Tabs>
+
+---
+
+## Optional Variables
+
+These variables are not required to run BuzzTrip but are recommended for production deployments.
+
+### Monitoring & Analytics
+
+<ParamField query="NEXT_PUBLIC_SENTRY_DSN" type="string">
+  Sentry Data Source Name for client-side error tracking. Found in your Sentry project under **Settings → Client Keys (DSN)**.
+
+  **Example:** `https://abc123@o123456.ingest.sentry.io/789`
+</ParamField>
+
+<ParamField query="SENTRY_AUTH_TOKEN" type="string">
+  Sentry authentication token used for uploading source maps during the build. Generate one in Sentry under **Settings → Auth Tokens**. Server-side only.
+</ParamField>
+
+<ParamField query="SENTRY_ORG" type="string">
+  Your Sentry organization slug. Found in your Sentry URL: `https://sentry.io/organizations/<slug>/`.
+</ParamField>
+
+<ParamField query="SENTRY_PROJECT" type="string">
+  Your Sentry project slug. Found in Sentry under **Settings → Projects**.
+</ParamField>
+
+<ParamField query="NEXT_PUBLIC_POSTHOG_KEY" type="string">
+  PostHog project API key for product analytics. Found in your PostHog project under **Settings → Project API key**.
+
+  **Example:** `phc_...`
+</ParamField>
+
+<ParamField query="NEXT_PUBLIC_POSTHOG_HOST" type="string">
+  PostHog ingestion host. Use the default unless you are running a self-hosted PostHog instance.
+
+  **Default:** `https://app.posthog.com`
+</ParamField>
+
+---
+
+## Convex Dashboard Variables
+
+These variables are set in the **Convex dashboard** under **Settings → Environment Variables** — not in `.env.local`. They are available to your Convex functions at runtime but are never exposed to the browser.
+
+<ParamField query="CLERK_WEBHOOK_SECRET" type="string" required>
+  The Svix webhook signing secret from your Clerk dashboard. Used by the `/clerk-users-webhook` HTTP action to verify that incoming requests genuinely originate from Clerk.
+
+  See the [Webhooks](/backend/webhooks) page for full setup instructions.
+
+  **Example:** `whsec_...`
+</ParamField>
+
+---
+
+## `.env.local` Template
+
+Copy this template into `apps/web/.env.local` and fill in your values:
+
+```env apps/web/.env.local
+# Convex
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
+
+# Google Maps
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
+NEXT_PUBLIC_GOOGLE_MAPS_MAPID=your-map-id
+
+# Mapbox
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=pk.eyJ1...
+
+# Email
+RESEND_API_KEY=re_...
+
+# Billing
+POLAR_ACCESS_TOKEN=polar_...
+
+# Optional: Monitoring
+# NEXT_PUBLIC_SENTRY_DSN=https://...
+# SENTRY_AUTH_TOKEN=sntrys_...
+# SENTRY_ORG=your-org
+# SENTRY_PROJECT=your-project
+# NEXT_PUBLIC_POSTHOG_KEY=phc_...
+# NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+```
+
+<Info>
+  `CLERK_WEBHOOK_SECRET` is intentionally omitted from this template — it is set in the Convex dashboard, not in your local environment file.
+</Info>

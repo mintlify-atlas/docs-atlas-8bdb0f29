@@ -1,0 +1,95 @@
+---
+title: "Share and Collaborate on Maps in Real Time"
+sidebarTitle: "Sharing"
+description: "Invite collaborators to your maps with role-based permissions. Share via direct links or email invitation. Real-time edits sync instantly across all users."
+---
+
+BuzzTrip supports real-time multi-user collaboration powered by Convex. Every change a collaborator makes — adding a marker, drawing a path, editing a label — is pushed instantly to all other connected users on the same map. There is no need to refresh the page or manually sync data.
+
+## Visibility Levels
+
+Map visibility controls who can discover and access your map. Set it when creating the map or update it at any time from the map settings.
+
+<CardGroup cols={3}>
+  <Card title="Private" icon="lock">
+    Only the owner and explicitly invited collaborators can access the map. It does not appear in any public listings or search results.
+  </Card>
+  <Card title="Public" icon="globe">
+    Viewable by anyone. The map is indexable and searchable by other BuzzTrip users. Any user can duplicate a public map to their own account.
+  </Card>
+  <Card title="Unlisted" icon="link">
+    Accessible to anyone who holds the direct link, but not discoverable through search or public listings. Ideal for sharing with specific people without making the map fully public.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Set your map's visibility to `unlisted` for client-facing maps that should be shareable via a link but should not appear in public search results or be discoverable by other users.
+</Tip>
+
+## Permission Roles
+
+Every user added to a map is assigned one of four roles from the `permissionEnum`:
+
+| Role | Update Map | Manage Content | Delete Map | Manage Users |
+|---|---|---|---|---|
+| **owner** | ✅ | ✅ | ✅ | ✅ (all users) |
+| **editor** | ✅ | ✅ | ❌ | ✅ (non-owners only) |
+| **viewer** | ❌ | ❌ | ❌ | ❌ |
+| **commenter** | ❌ | ❌ | ❌ | ❌ |
+
+**Content management** covers creating, editing, and deleting markers, collections, collection links, labels, paths, routes, and route stops.
+
+<Accordion title="Detailed role permissions">
+  **Owner**
+  - Inherits all editor permissions
+  - Can delete the map itself (`maps:delete`)
+  - Can remove any collaborator including other editors (`map_users:delete`)
+
+  **Editor**
+  - Can update map metadata (`maps:update`)
+  - Can create and update `map_users` entries (but cannot delete the owner's entry)
+  - Can create, update, and delete: markers, collections, collection links, labels, paths, routes, route stops
+
+  **Viewer**
+  - Read-only access. Cannot create, edit, or delete any content.
+
+  **Commenter**
+  - Read-only access. Commenting is a planned feature — this role is reserved for future use.
+</Accordion>
+
+## Inviting Collaborators
+
+Use the `shareMap` mutation to add users to a map:
+
+<Steps>
+  <Step title="Find the user">
+    Search for the person you want to invite by name or username within BuzzTrip.
+  </Step>
+  <Step title="Choose a permission level">
+    Select `editor`, `viewer`, or `commenter` for the new collaborator. The `owner` role is reserved for the map creator.
+  </Step>
+  <Step title="Send the invitation">
+    Click **Share**. BuzzTrip calls `shareMap`, which checks for existing `map_users` entries. Only users who are not already on the map are added — duplicates are automatically filtered out, so it is safe to call `shareMap` multiple times with overlapping user lists.
+  </Step>
+</Steps>
+
+## Editing a Collaborator's Role
+
+To change a collaborator's permission level, call `editMapUser` with the `map_user` record ID and the new `permission` value. Only the `permission` field is updated — no other map user data is changed.
+
+## Removing a Collaborator
+
+Call `deleteMapUser` with the map ID and the `map_user` record ID to remove a collaborator's access entirely. After removal, the user can no longer view or edit the map (unless it is public or unlisted and they have the link).
+
+## Real-Time Updates
+
+BuzzTrip's backend is built on [Convex](https://convex.dev), a reactive database that maintains persistent WebSocket connections to all active clients. When any collaborator performs a mutation — adding a marker, editing a path, updating map metadata — Convex re-runs the affected queries and pushes the new data to every connected client on that map in real time.
+
+This means:
+- **No polling** — updates arrive via push, not periodic fetches
+- **No page refresh needed** — the UI reflects the latest state automatically
+- **Conflict-free** — each mutation runs transactionally on the server
+
+## Duplicating Public Maps
+
+Any authenticated BuzzTrip user can duplicate a map that has `visibility: "public"` set. The `duplicateMap` function creates a full independent copy under the duplicating user's account, including all markers, collections, collection links, paths, labels, routes, and route stops. The copy starts with the title `Copy of <original title>` and the duplicating user becomes the owner.

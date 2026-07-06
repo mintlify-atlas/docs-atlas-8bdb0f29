@@ -1,0 +1,559 @@
+---
+title: "Maps API: CRUD, Duplication, and View Tracking"
+sidebarTitle: "Maps"
+description: "Convex queries and mutations for creating, reading, updating, deleting, and duplicating maps. Includes view tracking and user map listing."
+---
+
+The Maps API is the core of BuzzTrip's backend. Every collaborative map, its participants, and its analytics are managed through the functions documented here. Most operations require authentication — the only exception is `trackMapView`, which is a public mutation used for anonymous analytics collection.
+
+All map IDs are Convex `Id<'maps'>` values. Authentication is enforced via `authedQuery` and `authedMutation` wrappers that inject a `ctx.user` object into the handler context.
+
+---
+
+## getMap
+
+Retrieves a single map document by its ID. Returns `null` if no map with the given ID exists.
+
+**API path:** `api.maps.index.getMap`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map to retrieve.
+</ParamField>
+
+**Returns:** The full map document, or `null`.
+
+<Expandable title="Response fields">
+  <ResponseField name="_id" type="Id<'maps'>">
+    Unique Convex document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) when the document was created.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Display title of the map.
+  </ResponseField>
+  <ResponseField name="description" type="string | undefined">
+    Optional description.
+  </ResponseField>
+  <ResponseField name="image" type="string | undefined">
+    Optional cover image URL.
+  </ResponseField>
+  <ResponseField name="icon" type="IconType | string | null | undefined">
+    Optional icon for the map.
+  </ResponseField>
+  <ResponseField name="color" type="string | undefined">
+    Optional accent color.
+  </ResponseField>
+  <ResponseField name="owner_id" type="Id<'users'>">
+    User ID of the map owner.
+  </ResponseField>
+  <ResponseField name="location_name" type="string | undefined">
+    Human-readable location name (e.g. `"Brisbane, Australia"`).
+  </ResponseField>
+  <ResponseField name="lat" type="number | undefined">
+    Center latitude of the map.
+  </ResponseField>
+  <ResponseField name="lng" type="number | undefined">
+    Center longitude of the map.
+  </ResponseField>
+  <ResponseField name="bounds" type="MapBounds | null | undefined">
+    Optional geographic bounding box `{ east, north, south, west, offset? }`.
+  </ResponseField>
+  <ResponseField name="visibility" type='"private" | "public" | "unlisted"'>
+    Access visibility setting.
+  </ResponseField>
+  <ResponseField name="mapTypeId" type='"hybrid" | "roadmap" | "satellite" | "terrain" | undefined'>
+    Base map tile type. Defaults to `"hybrid"` on creation.
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string | undefined">
+    ISO 8601 datetime string of the last update.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const map = useQuery(api.maps.index.getMap, { mapId });
+
+if (map) {
+  console.log(map.title, map.visibility);
+}
+```
+
+---
+
+## getMapUsers
+
+Returns all `map_users` records for a given map — i.e., everyone who has been granted access, along with their permission level.
+
+**API path:** `api.maps.index.getMapUsers`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The Convex document ID of the map.
+</ParamField>
+
+**Returns:** An array of `map_users` documents.
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'map_users'>">
+    Unique ID for this map-user relationship.
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The map this record belongs to.
+  </ResponseField>
+  <ResponseField name="user_id" type="Id<'users'>">
+    The user who has been granted access.
+  </ResponseField>
+  <ResponseField name="permission" type='"owner" | "editor" | "viewer" | "commenter"'>
+    The permission level for this user.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const mapUsers = useQuery(api.maps.index.getMapUsers, { mapId });
+
+mapUsers?.forEach((u) => {
+  console.log(u.user_id, u.permission);
+});
+```
+
+---
+
+## getUserMaps
+
+Fetches all maps a user is associated with. It first queries the `map_users` join table by `user_id`, then enriches each record with the full map document — merging both objects into a `UserMap` shape.
+
+**API path:** `api.maps.index.getUserMaps`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="userId" type="Id<'users'>" required>
+  The Convex document ID of the user whose maps should be listed.
+</ParamField>
+
+**Returns:** `UserMap[]` — an array of merged map + map_user documents.
+
+<Expandable title="Response fields (each item — UserMap)">
+  <ResponseField name="_id" type="Id<'map_users'>">
+    The ID of the `map_users` record (not the map itself — use `map_id` to address the map).
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The document ID of the associated map.
+  </ResponseField>
+  <ResponseField name="user_id" type="Id<'users'>">
+    The user this record belongs to.
+  </ResponseField>
+  <ResponseField name="permission" type='"owner" | "editor" | "viewer" | "commenter"'>
+    The user's permission level on this map.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Map title.
+  </ResponseField>
+  <ResponseField name="visibility" type='"private" | "public" | "unlisted"'>
+    Map visibility.
+  </ResponseField>
+  <ResponseField name="owner_id" type="Id<'users'>">
+    Original owner of the map.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const userId = "user_xyz" as Id<"users">;
+
+const userMaps = useQuery(api.maps.index.getUserMaps, { userId });
+
+userMaps?.forEach((m) => {
+  console.log(m.map_id, m.title, m.permission);
+});
+```
+
+---
+
+## trackMapView
+
+Records an anonymous map view event for analytics purposes. This is the **only unauthenticated** mutation in the Maps API — it uses `zodMutation` rather than `authedMutation`, so it can be called from public map pages.
+
+**API path:** `api.maps.index.trackMapView`  
+**Type:** `zodMutation` — no authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map being viewed.
+</ParamField>
+<ParamField path="userId" type="Id<'users'> | undefined">
+  Optional — the authenticated user's ID, if available.
+</ParamField>
+<ParamField path="ip" type="string | undefined">
+  The viewer's IP address.
+</ParamField>
+<ParamField path="country" type="string | undefined">
+  Country derived from IP geolocation.
+</ParamField>
+<ParamField path="region" type="string | undefined">
+  Region/state derived from IP geolocation.
+</ParamField>
+<ParamField path="city" type="string | undefined">
+  City derived from IP geolocation.
+</ParamField>
+<ParamField path="userAgent" type="string | undefined">
+  Raw User-Agent header string.
+</ParamField>
+<ParamField path="os" type="string | undefined">
+  Operating system parsed from User-Agent.
+</ParamField>
+<ParamField path="browser" type="string | undefined">
+  Browser parsed from User-Agent.
+</ParamField>
+<ParamField path="device" type="string | undefined">
+  Device type parsed from User-Agent.
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const trackView = useMutation(api.maps.index.trackMapView);
+
+await trackView({
+  mapId: "abc123" as Id<"maps">,
+  country: "AU",
+  city: "Brisbane",
+  browser: "Chrome",
+  device: "desktop",
+});
+```
+
+---
+
+## getMapViews
+
+Retrieves all recorded view events for a specific map. Useful for building analytics dashboards.
+
+**API path:** `api.maps.index.getMapViews`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose view records should be returned.
+</ParamField>
+
+**Returns:** An array of `mapViews` documents.
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'mapViews'>">
+    Unique view event ID.
+  </ResponseField>
+  <ResponseField name="mapId" type="Id<'maps'>">
+    The viewed map.
+  </ResponseField>
+  <ResponseField name="userId" type="Id<'users'> | undefined">
+    The authenticated user, if known.
+  </ResponseField>
+  <ResponseField name="country" type="string | undefined">
+    Country of the viewer.
+  </ResponseField>
+  <ResponseField name="city" type="string | undefined">
+    City of the viewer.
+  </ResponseField>
+  <ResponseField name="browser" type="string | undefined">
+    Browser name.
+  </ResponseField>
+  <ResponseField name="device" type="string | undefined">
+    Device type.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) of when the view was recorded.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const views = useQuery(api.maps.index.getMapViews, { mapId });
+
+console.log(`Total views: ${views?.length ?? 0}`);
+```
+
+---
+
+## createMap
+
+Creates a new map along with all required associated records. Internally calls `createMapFunction`, which:
+
+1. Inserts the map document (uppercasing the first letter of the title; defaulting `mapTypeId` to `"hybrid"`).
+2. Creates a `map_users` record for the authenticated caller with `permission: "owner"`.
+3. Optionally creates `map_users` records for any additional users passed in `users`.
+4. Creates a default collection named `"Default Collection"` for the map.
+
+**API path:** `api.maps.index.createMap`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="map" type="mapsEditSchema" required>
+  The map data to insert.
+
+  <Expandable title="map fields">
+    <ParamField path="map.title" type="string" required>
+      Map title. The first letter is automatically uppercased.
+    </ParamField>
+    <ParamField path="map.description" type="string">
+      Optional description.
+    </ParamField>
+    <ParamField path="map.visibility" type='"private" | "public" | "unlisted"' required>
+      Access visibility for the map.
+    </ParamField>
+    <ParamField path="map.mapTypeId" type='"hybrid" | "roadmap" | "satellite" | "terrain"'>
+      Base map tile type. Defaults to `"hybrid"` if omitted.
+    </ParamField>
+    <ParamField path="map.image" type="string">
+      Optional cover image URL.
+    </ParamField>
+    <ParamField path="map.icon" type="IconType | string | null">
+      Optional map icon.
+    </ParamField>
+    <ParamField path="map.color" type="string">
+      Optional accent color.
+    </ParamField>
+    <ParamField path="map.location_name" type="string">
+      Human-readable location name (e.g. `"Tokyo, Japan"`).
+    </ParamField>
+    <ParamField path="map.lat" type="number">
+      Initial center latitude.
+    </ParamField>
+    <ParamField path="map.lng" type="number">
+      Initial center longitude.
+    </ParamField>
+    <ParamField path="map.bounds" type="MapBounds | null">
+      Optional bounding box `{ east, north, south, west, offset? }`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="users" type="Array<{ user_id: Id<'users'>; permission: 'owner' | 'editor' | 'viewer' | 'commenter' }>">
+  Optional list of additional users to invite at creation time. The authenticated user is always added as `"owner"` automatically.
+</ParamField>
+
+**Returns:** `Id<'maps'>` — the document ID of the newly created map.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createMap = useMutation(api.maps.index.createMap);
+
+const newMapId = await createMap({
+  map: {
+    title: "Japan trip 2025",
+    description: "All our favourite spots in Tokyo and Kyoto",
+    visibility: "private",
+    mapTypeId: "roadmap",
+    location_name: "Japan",
+  },
+  users: [
+    { user_id: "user_friend" as Id<"users">, permission: "editor" },
+  ],
+});
+
+console.log("Created map:", newMapId);
+```
+
+---
+
+## updateMap
+
+Patches an existing map document with partial field updates. If `title` is provided it is automatically uppercased. Always stamps `updatedAt` with the current ISO datetime.
+
+**API path:** `api.maps.index.updateMap`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map to update.
+</ParamField>
+<ParamField path="map" type="Partial<mapsEditSchema>" required>
+  Any subset of map fields to update. All fields are optional.
+
+  <Expandable title="Updatable fields">
+    <ParamField path="map.title" type="string">
+      New title. First letter is automatically uppercased.
+    </ParamField>
+    <ParamField path="map.description" type="string">
+      New description.
+    </ParamField>
+    <ParamField path="map.visibility" type='"private" | "public" | "unlisted"'>
+      New visibility setting.
+    </ParamField>
+    <ParamField path="map.mapTypeId" type='"hybrid" | "roadmap" | "satellite" | "terrain"'>
+      New base tile type.
+    </ParamField>
+    <ParamField path="map.image" type="string">
+      New cover image URL.
+    </ParamField>
+    <ParamField path="map.icon" type="IconType | string | null">
+      New icon.
+    </ParamField>
+    <ParamField path="map.color" type="string">
+      New accent color.
+    </ParamField>
+    <ParamField path="map.lat" type="number">
+      Updated center latitude.
+    </ParamField>
+    <ParamField path="map.lng" type="number">
+      Updated center longitude.
+    </ParamField>
+    <ParamField path="map.bounds" type="MapBounds | null">
+      Updated bounding box.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const updateMap = useMutation(api.maps.index.updateMap);
+
+await updateMap({
+  mapId: "abc123" as Id<"maps">,
+  map: {
+    title: "Japan trip 2025 — updated",
+    visibility: "public",
+  },
+});
+```
+
+---
+
+## partialMapUpdate
+
+Identical to `updateMap` but **skips the title uppercasing logic**. Use this for programmatic or silent field updates (e.g. syncing map viewport bounds) where you want to preserve the exact string provided.
+
+**API path:** `api.maps.index.partialMapUpdate`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map to update.
+</ParamField>
+<ParamField path="map" type="Partial<mapsEditSchema>" required>
+  Any subset of map fields to update. All fields are optional. The value of `title` is stored verbatim, without case transformation.
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const partialMapUpdate = useMutation(api.maps.index.partialMapUpdate);
+
+// Silently sync the current viewport bounds
+await partialMapUpdate({
+  mapId: "abc123" as Id<"maps">,
+  map: {
+    lat: 35.6762,
+    lng: 139.6503,
+    bounds: { north: 35.8, south: 35.5, east: 139.9, west: 139.4 },
+  },
+});
+```
+
+---
+
+## deleteMap
+
+Permanently deletes a map document. This does **not** cascade-delete related records (markers, collections, paths, etc.) — handle cascades separately if required.
+
+**API path:** `api.maps.index.deleteMap`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The document ID of the map to delete.
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const deleteMap = useMutation(api.maps.index.deleteMap);
+
+await deleteMap({ mapId: "abc123" as Id<"maps"> });
+```
+
+---
+
+## duplicateMap
+
+Creates a full deep copy of an existing map, including all of its markers, collections, collection links, paths, labels, routes, and route stops. The new map is owned by the authenticated user and prefixed with `"Copy of "`.
+
+**API path:** `api.maps.index.duplicateMap`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The document ID of the map to duplicate.
+</ParamField>
+
+**Returns:** `Id<'maps'>` — the document ID of the newly created duplicate map.
+
+<Note>
+  **Permission check:** The caller must satisfy at least one of the following conditions to duplicate a map:
+
+  1. They are the map owner (`owner_id === ctx.user._id`).
+  2. They have an existing `map_users` record for that map (any permission level).
+  3. The map's `visibility` is `"public"` — public maps can be duplicated by anyone.
+
+  If none of these conditions are met, the mutation throws `"You don't have permission to duplicate this map"`.
+
+  **What gets copied:**
+  - `collections` — new IDs assigned; old-to-new ID map is tracked.
+  - `markers` — new IDs assigned; old-to-new ID map is tracked.
+  - `collection_links` — re-linked using the new collection and marker IDs.
+  - `paths` — duplicated as-is with the new `mapId`.
+  - `labels` — duplicated as-is with the new `map_id`.
+  - `routes` — new IDs assigned; old-to-new ID map is tracked.
+  - `route_stops` — re-linked using the new route and marker IDs.
+
+  If any step fails after the map document has been inserted, the new map is deleted to prevent orphaned records.
+</Note>
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const duplicateMap = useMutation(api.maps.index.duplicateMap);
+
+try {
+  const newMapId = await duplicateMap({
+    mapId: "abc123" as Id<"maps">,
+  });
+  console.log("Duplicate map created:", newMapId);
+} catch (err) {
+  console.error("Duplication failed:", err);
+}
+```

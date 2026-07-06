@@ -1,0 +1,345 @@
+---
+title: "BuzzTrip Database Schema: Tables, Indexes, and Types"
+sidebarTitle: "Schema"
+description: "Complete reference for all BuzzTrip Convex database tables, fields, indexes, and TypeScript types. Covers maps, markers, collections, places, users, and more."
+---
+
+BuzzTrip uses Convex as its database. All tables are defined in `packages/backend/convex/schema.ts` using Zod schemas converted to Convex validators via `zodToConvex`. Every document automatically receives `_id` (a unique `Id<tableName>`) and `_creationTime` (Unix timestamp in milliseconds).
+
+## Common Fields
+
+Every Convex document includes these system fields automatically:
+
+| Field | Type | Description |
+|---|---|---|
+| `_id` | `Id<tableName>` | Unique document identifier |
+| `_creationTime` | `number` | Creation timestamp (Unix ms) |
+
+## Tables
+
+### `maps`
+
+The top-level container for a BuzzTrip map project.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `title` | `string` | ✓ | Map display name |
+| `description` | `string` | — | Optional description |
+| `image` | `string` | — | Cover image URL |
+| `icon` | `string` | — | Emoji or icon identifier |
+| `color` | `string` | — | Hex color string |
+| `owner_id` | `Id<'users'>` | ✓ | The user who owns the map |
+| `location_name` | `string` | — | Human-readable starting location (e.g. "Brisbane, Australia") |
+| `lat` | `number` | — | Starting latitude |
+| `lng` | `number` | — | Starting longitude |
+| `bounds` | `{lat: number, lng: number}` | — | Map viewport bounds |
+| `visibility` | `'private' \| 'public' \| 'unlisted'` | ✓ | Access control |
+| `mapTypeId` | `'hybrid' \| 'roadmap' \| 'satellite' \| 'terrain'` | — | Map tile style |
+| `updatedAt` | `string` (ISO datetime) | — | Last update timestamp |
+
+**Indexes:** `by_visibility`
+
+---
+
+### `mapViews`
+
+Analytics tracking for map page views.
+
+| Field | Type | Description |
+|---|---|---|
+| `mapId` | `Id<'maps'>` | The viewed map |
+| `userId` | `Id<'users'>` | Viewer (if authenticated) |
+| `ip` | `string` | Viewer IP address |
+| `country` | `string` | Country from Vercel geo headers |
+| `region` | `string` | Region/state |
+| `city` | `string` | City |
+| `userAgent` | `string` | Browser user agent |
+| `os` | `string` | Operating system |
+| `browser` | `string` | Browser name |
+| `device` | `'Mobile' \| 'Desktop'` | Device type |
+
+**Indexes:** `by_map_id`, `by_user_id`
+
+---
+
+### `map_users`
+
+Links users to maps with a permission role.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `map_id` | `Id<'maps'>` | ✓ | The map |
+| `user_id` | `Id<'users'>` | ✓ | The user |
+| `permission` | `'owner' \| 'editor' \| 'viewer' \| 'commenter'` | ✓ | Role (default: `editor`) |
+
+**Indexes:** `by_map_id`, `by_user_id`
+
+---
+
+### `markers`
+
+Individual pinned locations on a map.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `title` | `string` | ✓ | Marker label |
+| `note` | `string` | — | Additional notes |
+| `lat` | `number` | ✓ | Latitude |
+| `lng` | `number` | ✓ | Longitude |
+| `created_by` | `Id<'users'>` | ✓ | Creator |
+| `icon` | `string` | ✓ | Icon identifier |
+| `color` | `string` | ✓ | Hex color string |
+| `place_id` | `Id<'places'>` | ✓ | Linked place record |
+| `map_id` | `Id<'maps'>` | ✓ | Parent map |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+**Indexes:** `by_map_id`, `by_place_id`
+
+---
+
+### `collections`
+
+Named groups for organizing markers.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `map_id` | `Id<'maps'>` | ✓ | Parent map |
+| `title` | `string` | ✓ | Collection name |
+| `description` | `string` | — | Optional description |
+| `created_by` | `Id<'users'>` | ✓ | Creator |
+| `icon` | `string` | ✓ | Icon identifier |
+| `color` | `string` | — | Hex color string |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+**Indexes:** `by_map_id`
+
+---
+
+### `collection_links`
+
+Many-to-many join between markers and collections.
+
+| Field | Type | Description |
+|---|---|---|
+| `collection_id` | `Id<'collections'>` | The collection |
+| `marker_id` | `Id<'markers'>` | The marker |
+| `map_id` | `Id<'maps'>` | Denormalized map reference |
+| `user_id` | `Id<'users'>` | User who created the link |
+
+**Indexes:** `by_map_id`, `by_collection_id`
+
+---
+
+### `labels`
+
+Descriptive map overlays with icons and colors.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `map_id` | `Id<'maps'>` | ✓ | Parent map |
+| `title` | `string` | ✓ | Label text |
+| `description` | `string` | ✓ | Description |
+| `icon` | `string \| null` | — | Icon identifier |
+| `color` | `string` | — | Hex color |
+| `created_by` | `Id<'users'>` | ✓ | Creator |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+<Warning>
+  Either `icon` or `color` (or both) must be provided. The schema enforces this via Zod `.refine()`.
+</Warning>
+
+**Indexes:** `by_map_id`
+
+---
+
+### `paths`
+
+Geometric shapes drawn on the map.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `mapId` | `Id<'maps'>` | ✓ | Parent map |
+| `pathType` | `'text' \| 'circle' \| 'rectangle' \| 'polygon' \| 'line'` | ✓ | Shape type |
+| `title` | `string` | ✓ | Shape label |
+| `note` | `string` | — | Notes |
+| `points` | `Position \| Position[] \| Position[][]` | ✓ | Coordinate data |
+| `measurements` | `Measurements` | — | Calculated dimensions |
+| `styles` | `PathStyle` | — | Visual styling |
+| `createdBy` | `Id<'users'>` | ✓ | Creator |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+Where `Position = [number, number] | [number, number, number]` (longitude, latitude, optional altitude).
+
+**Indexes:** `byMapId`
+
+---
+
+### `routes`
+
+Multi-stop routes on a map.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `map_id` | `Id<'maps'>` | ✓ | Parent map |
+| `name` | `string` | ✓ | Route name |
+| `description` | `string` | — | Description |
+| `travel_type` | `'driving' \| 'walking' \| 'transit' \| 'bicycling'` | ✓ | Travel mode |
+| `user_id` | `Id<'users'>` | ✓ | Creator |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+**Indexes:** `by_map_id`
+
+---
+
+### `route_stops`
+
+Individual stops within a route, ordered by `stop_order`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `map_id` | `Id<'maps'>` | ✓ | Parent map |
+| `route_id` | `Id<'routes'>` | ✓ | Parent route |
+| `marker_id` | `Id<'markers'>` | ✓ | Stop location marker |
+| `user_id` | `Id<'users'>` | ✓ | Creator |
+| `lat` | `number` | ✓ | Latitude |
+| `lng` | `number` | ✓ | Longitude |
+| `stop_order` | `number` | ✓ | Position in route sequence |
+| `updatedAt` | `string` | — | Last update timestamp |
+
+**Indexes:** `by_map_id`
+
+---
+
+### `places`
+
+Canonical location data shared across markers.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `title` | `string` | ✓ | Place name |
+| `description` | `string` | — | Description |
+| `lat` | `number` | ✓ | Latitude |
+| `lng` | `number` | ✓ | Longitude |
+| `bounds` | `{lat: number, lng: number}` | ✓ | Bounding box |
+| `address` | `string` | — | Street address |
+| `gm_place_id` | `string` | — | Google Maps place ID |
+| `mb_place_id` | `string` | — | Mapbox place ID |
+| `fq_place_id` | `string` | — | Foursquare place ID |
+| `plus_code` | `string` | — | Open Location Code (auto-generated) |
+| `what3words` | `string` | — | what3words address |
+| `icon` | `string` | ✓ | Icon derived from POI type |
+| `photos` | `string[]` | — | Photo URLs |
+| `rating` | `number` | ✓ | Average rating |
+| `types` | `string[]` | — | POI category tags |
+| `website` | `string` | — | Website URL |
+| `phone` | `string` | — | Phone number |
+
+**Indexes:** `gm_place_id_ixd`, `mb_place_id_ixd`, `fq_place_id_ixd`, `places_lat_idx`, `places_lng_idx`, `by_place_lat_lng` (compound), `places_address_idx`
+
+---
+
+### `places_reviews`
+
+User-submitted reviews for places.
+
+| Field | Type | Description |
+|---|---|---|
+| `place_id` | `Id<'places'>` | The reviewed place |
+| `user_id` | `Id<'users'>` | Reviewer |
+| `author_name` | `string` | Display name |
+| `author_url` | `string \| null` | Profile URL |
+| `profile_photo_url` | `string` | Avatar URL |
+| `rating` | `number \| null` | Star rating |
+| `description` | `string` | Review text |
+
+---
+
+### `place_photos`
+
+User-uploaded photos linked to places.
+
+| Field | Type | Description |
+|---|---|---|
+| `place_id` | `Id<'places'>` | The place |
+| `user_id` | `Id<'users'>` | Uploader |
+| `photo_url` | `string` | Photo URL |
+| `width` | `number` | Image width (px) |
+| `height` | `number` | Image height (px) |
+| `caption` | `string` | Photo caption |
+
+---
+
+### `users`
+
+BuzzTrip user profiles, synced from Clerk via webhook.
+
+| Field | Type | Description |
+|---|---|---|
+| `clerkUserId` | `string` | Clerk user ID |
+| `name` | `string` | Full name |
+| `first_name` | `string` | First name |
+| `last_name` | `string` | Last name |
+| `email` | `string` | Email address |
+| `username` | `string` | Username |
+| `image` | `string` | Avatar URL |
+| `updatedAt` | `string` | Last sync timestamp |
+| `isBetaUser` | `boolean` | Beta program access flag |
+
+**Indexes:** `by_email`, `by_clerk_id`, `by_isBetaUser`
+
+**Search index:** `search_user` — full-text search on `name`, filterable by `email` and `username`
+
+---
+
+### `beta_users`
+
+Beta program sign-up tracking.
+
+| Field | Type | Description |
+|---|---|---|
+| `email` | `string` | Email address |
+| `token` | `string` | Unique verification token |
+| `userId` | `Id<'users'>` | Linked user (once verified) |
+
+**Indexes:** `by_email`, `by_token`, `by_user_id`
+
+---
+
+## TypeScript Types
+
+Import types from `@buzztrip/backend/types`:
+
+```typescript
+import type {
+  Map, NewMap,
+  Marker, NewMarker, CombinedMarker,
+  Place, NewPlace,
+  Collection, NewCollection,
+  CollectionLink,
+  MapUser, NewMapUser, CombinedMapUser, ShareMapUser, UserMap,
+  Label, NewLabel,
+  Route, NewRoute,
+  RouteStop, NewRouteStop,
+  Path, NewPath,
+  Bounds,
+  PermissionEnum,    // 'owner' | 'editor' | 'viewer' | 'commenter'
+  TravelTypeEnum,    // 'driving' | 'walking' | 'transit' | 'bicycling'
+  MapTypeId,         // 'hybrid' | 'roadmap' | 'satellite' | 'terrain'
+  Measurements,
+  PathStyle,
+} from '@buzztrip/backend/types';
+```
+
+Import Convex document types from `@buzztrip/backend/dataModel`:
+
+```typescript
+import type { Doc, Id } from '@buzztrip/backend/dataModel';
+
+// Full document type with _id and _creationTime
+type MapDoc = Doc<'maps'>;
+type MarkerId = Id<'markers'>;
+```
+
+<Note>
+  `New*` types (e.g. `NewMap`, `NewMarker`) are insert schemas with system fields (`_id`, `_creationTime`) stripped. Use them when constructing objects to pass to Convex mutations.
+</Note>

@@ -1,0 +1,261 @@
+---
+title: "Collections API: Group and Organize Map Markers"
+sidebarTitle: "Collections"
+description: "Convex queries and mutations for managing marker collections. Collections group related markers and support custom icons and colors."
+---
+
+Collections provide a way to categorize and group markers within a map — for example, "Restaurants", "Hotels", or "Must-See Sights". Each collection belongs to a single map and can have a custom icon and color.
+
+Membership of markers in collections is tracked through `collection_links` join records, each connecting a `marker_id` to a `collection_id` on a given `map_id`. These links are managed via the [Markers API](/backend/maps/markers) (`collectionIds_to_add` / `collectionIds_to_remove` on `editMarker`, and `collectionIds` on `createMarker`).
+
+<Note>
+  Every new map automatically receives a **Default Collection** at creation time. This is handled internally by the `createCollectionFunction` helper, which is called by `createMapFunction` in the Maps API. You do not need to create this default collection manually.
+</Note>
+
+All operations require authentication via the `authedQuery` / `authedMutation` wrappers.
+
+---
+
+## getCollectionsForMap
+
+Returns all collections belonging to a map.
+
+**API path:** `api.maps.collections.getCollectionsForMap`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose collections should be returned.
+</ParamField>
+
+**Returns:** `Collection[] | null`
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'collections'>">
+    Unique collection document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) when the collection was created.
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The map this collection belongs to.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Display title of the collection.
+  </ResponseField>
+  <ResponseField name="description" type="string | undefined">
+    Optional description.
+  </ResponseField>
+  <ResponseField name="created_by" type="Id<'users'>">
+    User who created the collection.
+  </ResponseField>
+  <ResponseField name="icon" type="IconType | string">
+    Icon identifier for the collection (e.g. `"Folder"`, `"Utensils"`).
+  </ResponseField>
+  <ResponseField name="color" type="string | undefined">
+    Optional accent color for the collection.
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string | undefined">
+    ISO 8601 datetime of the last update.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const collections = useQuery(
+  api.maps.collections.getCollectionsForMap,
+  { mapId }
+);
+
+collections?.forEach((c) => {
+  console.log(c._id, c.title, c.icon);
+});
+```
+
+---
+
+## getCollectionLinksForMap
+
+Returns all `collection_links` records for a map — the full set of marker-to-collection assignments. Useful for building a complete picture of which markers belong to which collections without fetching each collection separately.
+
+**API path:** `api.maps.collections.getCollectionLinksForMap`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose collection links should be returned.
+</ParamField>
+
+**Returns:** `CollectionLink[] | null`
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'collection_links'>">
+    Unique link document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) when the link was created.
+  </ResponseField>
+  <ResponseField name="collection_id" type="Id<'collections'>">
+    The collection the marker has been assigned to.
+  </ResponseField>
+  <ResponseField name="marker_id" type="Id<'markers'>">
+    The marker that has been assigned.
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The map both the collection and marker belong to.
+  </ResponseField>
+  <ResponseField name="user_id" type="Id<'users'>">
+    The user who created this link.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const links = useQuery(
+  api.maps.collections.getCollectionLinksForMap,
+  { mapId }
+);
+
+// Build a map of collectionId → markerId[]
+const byCollection = new Map<string, string[]>();
+links?.forEach((link) => {
+  const existing = byCollection.get(link.collection_id) ?? [];
+  byCollection.set(link.collection_id, [...existing, link.marker_id]);
+});
+```
+
+---
+
+## createCollection
+
+Creates a new collection on a map. The `created_by` field is automatically injected from the authenticated user context — you do not need to supply it.
+
+**API path:** `api.maps.collections.createCollection`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="map_id" type="Id<'maps'>" required>
+  The map to attach this collection to.
+</ParamField>
+<ParamField path="title" type="string" required>
+  Display title for the collection (e.g. `"Restaurants"`, `"Day 1"`).
+</ParamField>
+<ParamField path="icon" type="IconType | string" required>
+  Icon identifier. This field is required by the schema.
+</ParamField>
+<ParamField path="description" type="string">
+  Optional description of the collection.
+</ParamField>
+<ParamField path="color" type="string">
+  Optional accent color string.
+</ParamField>
+
+**Returns:** `Id<'collections'>` — the document ID of the newly created collection.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createCollection = useMutation(api.maps.collections.createCollection);
+
+const collectionId = await createCollection({
+  map_id: "abc123" as Id<"maps">,
+  title: "Restaurants",
+  icon: "Utensils",
+  description: "Great places to eat",
+  color: "#f4a261",
+});
+
+console.log("Created collection:", collectionId);
+```
+
+---
+
+## editCollection
+
+Updates an existing collection's metadata. Automatically stamps `updatedAt` with the current ISO datetime.
+
+**API path:** `api.maps.collections.editCollection`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="collectionId" type="Id<'collections'>" required>
+  The collection to update.
+</ParamField>
+<ParamField path="collection" type="Partial<collectionsEditSchema>" required>
+  Fields to update. All are optional.
+
+  <Expandable title="Updatable fields">
+    <ParamField path="collection.title" type="string">
+      New display title.
+    </ParamField>
+    <ParamField path="collection.description" type="string">
+      New description.
+    </ParamField>
+    <ParamField path="collection.icon" type="IconType | string">
+      New icon identifier.
+    </ParamField>
+    <ParamField path="collection.color" type="string">
+      New accent color.
+    </ParamField>
+    <ParamField path="collection.map_id" type="Id<'maps'>">
+      The map the collection belongs to.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `Id<'collections'>` — the ID of the updated collection.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const editCollection = useMutation(api.maps.collections.editCollection);
+
+const collectionId = await editCollection({
+  collectionId: "collection_restaurants" as Id<"collections">,
+  collection: {
+    title: "Best Restaurants",
+    color: "#e63946",
+  },
+});
+
+console.log("Updated collection:", collectionId);
+```
+
+---
+
+## deleteCollection
+
+Permanently deletes a collection document. This does **not** automatically delete the associated `collection_links` — markers previously assigned to this collection will retain orphaned link records until cleaned up.
+
+**API path:** `api.maps.collections.deleteCollection`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="collectionId" type="Id<'collections'>" required>
+  The document ID of the collection to delete.
+</ParamField>
+
+**Returns:** `Id<'collections'>` — the ID of the deleted collection.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const deleteCollection = useMutation(api.maps.collections.deleteCollection);
+
+const deletedId = await deleteCollection({
+  collectionId: "collection_restaurants" as Id<"collections">,
+});
+
+console.log("Deleted collection:", deletedId);
+```

@@ -1,47 +1,106 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with BuzzTrip in Minutes"
+sidebarTitle: "Quickstart"
+description: "Create your first custom map on BuzzTrip, add markers, organize into collections, and share with collaborators — all in under 5 minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+This guide walks you through everything you need to go from zero to a fully annotated, shareable map on BuzzTrip. By the end you will have a map with at least one marker, a collection to organize it, a drawn path with live measurements, and a shareable link ready to send to collaborators.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+<Note>
+  BuzzTrip uses Convex for its real-time data layer. Any change you or a collaborator makes — adding a marker, renaming a collection, drawing a path — appears instantly for everyone viewing the map. No manual refresh required.
+</Note>
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Sign up for a free account">
+    Go to [buzztrip.co](https://buzztrip.co) and click **Start Creating Maps**. Sign up with your email or a social provider through Clerk. No credit card is required — BuzzTrip is free during the public beta.
 
-    ```bash
-    npm install your-package
-    ```
+    Once authenticated you will land on your maps dashboard at `/app`.
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+  <Step title="Create a new map">
+    From the dashboard, click **New Map**. A creation dialog will appear where you can configure:
+
+    - **Title** — give your map a descriptive name (e.g. "Tokyo Trip 2026").
+    - **Description** — optional context about the map's purpose.
+    - **Visibility** — choose one of three options:
+      - `private` — only you and explicitly invited users can access it.
+      - `public` — viewable by anyone and discoverable via search.
+      - `unlisted` — accessible by direct link, but not indexed or searchable.
+    - **Map style** — select the base layer that suits your use case:
+      - `roadmap` — standard street map (default).
+      - `satellite` — aerial/satellite imagery.
+      - `hybrid` — satellite imagery with road and label overlays.
+      - `terrain` — topographic detail with elevation shading.
+    - **Starting location** — optionally search for a city or address to center the map's initial view.
+
+    Click **Create** and your new map opens in the editor.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
-    ```
+  <Step title="Add your first marker">
+    There are two ways to add a marker:
+
+    - **Click anywhere on the map** — a marker is placed at that coordinate and the marker detail panel opens on the left sidebar.
+    - **Click a point of interest (POI)** — tapping a labeled place on the map pulls in rich place data from Google Maps, Mapbox, or Foursquare automatically.
+
+    In the detail panel you can set:
+
+    - **Title** — the display name shown on the map.
+    - **Note** — free-text notes, directions, or any other context.
+    - **Icon** — choose from the icon picker to visually distinguish this marker.
+    - **Color** — pick a color to match a collection or category.
+    - **Collection** — assign the marker to an existing collection (or create one in the next step).
+
+    Click **Save** to persist the marker. It is synced to Convex immediately and visible to all collaborators in real time.
+  </Step>
+
+  <Step title="Create a collection">
+    Collections are named groups that organize related markers under a single visual layer. To create one:
+
+    1. In the left sidebar, click the **Collections** tab then **New Collection**.
+    2. Give the collection a **name** (e.g. "Restaurants", "Hotels", "Day 1 Stops").
+    3. Choose an **icon** and a **color** — these appear on the collection badge and on all markers assigned to it.
+    4. Click **Create**.
+
+    You can now assign existing markers to this collection by editing each marker and selecting the collection from the dropdown, or by assigning the collection when you add new markers.
+
+    <Tip>
+      Use one collection per category or day of travel. Toggling a collection's visibility on the map hides or shows all its markers at once, which is handy for decluttering complex maps.
+    </Tip>
+  </Step>
+
+  <Step title="Draw a path or shape">
+    BuzzTrip's drawing tools let you sketch routes, boundaries, and areas directly on the map with live measurement feedback.
+
+    1. In the toolbar, select the **Draw** (path) tool.
+    2. Choose a shape type:
+       - **Line** — freeform polyline for routes or custom paths.
+       - **Circle** — radius-based area, useful for proximity zones.
+       - **Rectangle** — axis-aligned bounding box.
+       - **Polygon** — closed multi-point shape for any irregular area.
+    3. Click or drag on the map to draw. Distance (for lines) or area (for shapes) is shown as a live measurement that updates with each point you place.
+    4. Double-click or click the first point again to close and finish the shape.
+    5. Set a **name**, **color**, and optional **note** in the detail panel, then save.
+
+    Paths and shapes are stored alongside your markers and sync to all collaborators in real time.
+  </Step>
+
+  <Step title="Share your map">
+    When your map is ready to share:
+
+    - **Public or unlisted maps** — change the map's visibility (in Map Settings) to `public` or `unlisted`. Anyone with the link can view the map immediately.
+    - **Invite specific collaborators** — open the **Share** panel, enter a collaborator's email address, and assign them a role:
+      - `editor` — can add, edit, and delete markers, collections, and paths.
+      - `commenter` — can leave comments but cannot modify map content.
+      - `viewer` — read-only access to the map.
+
+    Collaborators receive an invitation and their changes (for editors) appear to everyone in real time via Convex.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Running BuzzTrip Yourself
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+BuzzTrip is fully open source under the AGPL-3.0 license. If you want to run your own instance — for a private team, to customize the codebase, or to contribute — see the self-hosting guide.
+
+<Card title="Self-Hosting Guide" icon="server" href="/self-hosting">
+  Clone the repo, configure environment variables, and spin up BuzzTrip on your own infrastructure.
+</Card>

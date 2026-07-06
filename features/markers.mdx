@@ -1,0 +1,102 @@
+---
+title: "Markers: Pin and Annotate Locations on Your Map"
+sidebarTitle: "Markers"
+description: "Drop custom markers anywhere on your map or on Points of Interest. Add titles, notes, icons, colors, and organize markers into collections."
+---
+
+Markers are the primary way to annotate locations in BuzzTrip. Each marker pins a specific latitude/longitude coordinate on your map and can carry a title, note, icon, and color. Markers are also linked to a **place** record that stores rich Point of Interest (POI) data such as address, rating, website, and photos — making them much more than simple pins.
+
+## Marker Properties
+
+<ParamField path="title" type="string" required>
+  The display name shown on the map and in the sidebar for this marker.
+</ParamField>
+
+<ParamField path="note" type="string">
+  An optional free-text note or description attached to the marker.
+</ParamField>
+
+<ParamField path="lat" type="number" required>
+  The latitude of the marker's position.
+</ParamField>
+
+<ParamField path="lng" type="number" required>
+  The longitude of the marker's position.
+</ParamField>
+
+<ParamField path="icon" type="icon" required>
+  A visual icon displayed on the map pin, derived from the `iconSchema`. Icons are typically named after Lucide icon identifiers (e.g. `"MapPin"`, `"Camera"`, `"Folder"`).
+</ParamField>
+
+<ParamField path="color" type="string" required>
+  A hex color string that controls the color of the marker pin on the map.
+</ParamField>
+
+<ParamField path="place_id" type="ID (places)" required>
+  A reference to the `places` table. Every marker is linked to a place record that stores the canonical geographic and POI data for that location.
+</ParamField>
+
+## Adding Markers
+
+There are two ways to add a marker to your map:
+
+<Steps>
+  <Step title="Click anywhere on the map">
+    Click any empty area on the map to drop a new marker at that coordinate. BuzzTrip will create a new place record for that position if one does not already exist at the exact latitude/longitude.
+  </Step>
+  <Step title="Click an existing Point of Interest">
+    Click a POI that is already rendered on the base map (a restaurant, landmark, business, etc.). BuzzTrip reuses the existing place data from its database, so the marker is immediately populated with the POI's name, address, rating, and other details.
+  </Step>
+  <Step title="Assign to collections">
+    When creating a marker, you can optionally pass an array of `collectionIds` to immediately link the new marker to one or more collections.
+  </Step>
+</Steps>
+
+## Place Data
+
+Every marker is backed by a place record in the `places` table. When a marker is created, BuzzTrip first queries the places table by the exact `lat`/`lng` coordinate. If a matching place already exists, it is reused — preventing duplicate records. If no match is found, a new place is inserted.
+
+Place records store the following fields:
+
+| Field | Description |
+|---|---|
+| `title` | Name of the place |
+| `address` | Street address |
+| `lat` / `lng` | Canonical coordinates |
+| `bounds` | Geographic bounding box |
+| `rating` | Numeric rating |
+| `website` | Website URL |
+| `phone` | Phone number |
+| `photos` | Array of photo URLs |
+| `types` | Array of category/type strings |
+| `gm_place_id` | Google Maps Place ID |
+| `mb_place_id` | Mapbox Place ID |
+| `fq_place_id` | Foursquare Place ID |
+| `plus_code` | Plus Code (Open Location Code) |
+| `what3words` | What3words address |
+
+## Viewing Markers
+
+The `getMarkersView` query returns **CombinedMarker** objects — each marker merged with its associated place data. The `lat` and `lng` values are taken from the place record when available (falling back to the marker's own coordinates), ensuring the pin is always displayed at the authoritative geographic position.
+
+## Editing Markers
+
+Use the `editMarker` mutation to update a marker's title, note, icon, or color. You can also manage collection membership in the same call:
+
+<ParamField path="collectionIds_to_add" type="ID[] (collections)">
+  An array of collection IDs to link this marker to. A new `collection_links` record is created for each.
+</ParamField>
+
+<ParamField path="collectionIds_to_remove" type="ID[] (collections)">
+  An array of collection IDs to unlink this marker from. The corresponding `collection_links` records are deleted.
+</ParamField>
+
+The `updatedAt` timestamp is automatically set to the current time on every edit.
+
+## Deleting Markers
+
+The `deleteMarker` mutation removes the marker record from the database. Associated `collection_links` records should be cleaned up as part of your workflow to avoid orphaned links.
+
+<Tip>
+  Use collections to organize large numbers of markers by theme or category — for example, "Restaurants", "Hotels", and "Attractions". You can toggle entire collections on and off in the sidebar to reduce visual clutter on the map.
+</Tip>

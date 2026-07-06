@@ -1,0 +1,211 @@
+---
+title: "BuzzTrip Architecture: Monorepo, Convex, and Next.js"
+sidebarTitle: "Architecture"
+description: "Understand how BuzzTrip is structured: a Turborepo monorepo with a Convex real-time backend, Next.js 15 frontend, Clerk authentication, and shared UI packages."
+---
+
+BuzzTrip is built as a **Turborepo monorepo** housing two Next.js 15 applications — the main web app and an admin dashboard — backed by a single shared Convex real-time backend. Shared UI components, email templates, and TypeScript configurations are extracted into dedicated packages that both apps consume. This document describes how all those pieces fit together.
+
+## Technology Stack
+
+<CardGroup cols={2}>
+  <Card title="Turborepo" icon="diagram-project">
+    Monorepo orchestration, task pipelines, and remote build caching. All
+    cross-package `build`, `dev`, `lint`, and `clean` tasks are coordinated
+    through `turbo.json`.
+  </Card>
+  <Card title="Bun (v1.3.1)" icon="bolt">
+    Package manager and JavaScript runtime. Used for all `install`, `run`, and
+    script invocations across the monorepo.
+  </Card>
+  <Card title="Next.js 15" icon="n">
+    React framework with App Router, server components, and server actions. Used
+    for both `apps/web` and `apps/admin`.
+  </Card>
+  <Card title="Convex" icon="server">
+    Real-time backend-as-a-service providing the database, type-safe queries and
+    mutations, real-time subscriptions, file storage, and HTTP action endpoints.
+  </Card>
+  <Card title="Clerk" icon="lock">
+    User authentication and identity management. Handles sign-up, sign-in,
+    session JWTs, and user metadata. Integrated into Convex via webhooks.
+  </Card>
+  <Card title="Tailwind CSS v4" icon="paintbrush">
+    Utility-first CSS framework using the new CSS-first configuration approach
+    (no `tailwind.config.js`). Configuration lives in CSS files directly.
+  </Card>
+  <Card title="shadcn/ui (@buzztrip/ui)" icon="layers">
+    Component library built on Radix UI primitives, distributed as the internal
+    `@buzztrip/ui` workspace package. Import components into any app from this
+    shared source.
+  </Card>
+  <Card title="Zod + convex-helpers" icon="shield-check">
+    Runtime validation for all Convex schemas. `zodToConvex()` from
+    `convex-helpers` converts Zod schemas into Convex validators, keeping
+    type definitions as a single source of truth.
+  </Card>
+  <Card title="TypeScript 5.9+" icon="code">
+    Strict typing throughout every app and package. Shared `tsconfig` base
+    configurations live in `packages/tsconfig/`.
+  </Card>
+  <Card title="Polar" icon="credit-card">
+    Billing and subscription management for paid BuzzTrip plans.
+  </Card>
+  <Card title="Resend" icon="envelope">
+    Transactional email delivery. Email templates are React components in
+    `packages/transactional/`.
+  </Card>
+  <Card title="Vercel" icon="triangle">
+    Deployment platform for both Next.js applications.
+  </Card>
+</CardGroup>
+
+Optional observability integrations:
+
+- **Sentry** — error monitoring and performance tracing (`NEXT_PUBLIC_SENTRY_DSN`)
+- **PostHog** — product analytics and feature flags (`NEXT_PUBLIC_POSTHOG_KEY`)
+
+## Data Flow
+
+Every user interaction in the browser flows through the following path:
+
+```
+Browser → Next.js (App Router)
+               ↓
+         Clerk Auth (JWT)
+               ↓
+         Convex Client
+               ↓
+      Convex Backend (real-time)
+               ↓
+         Convex Database
+```
+
+Server components fetch data directly via `preloadQuery` / `fetchQuery` using the Convex Next.js adapter (`convexNextjsOptions()`), which forwards the Clerk JWT to Convex for authentication. Client components subscribe to live queries, receiving automatic real-time updates whenever the underlying data changes — no polling or manual cache invalidation required.
+
+## Backend Package Structure
+
+All server-side logic lives in `packages/backend/convex/`. The package is exported to both apps as `@buzztrip/backend`.
+
+```
+packages/backend/
+├── convex/
+│   ├── schema.ts           # All Convex table definitions
+│   ├── auth.config.ts      # Clerk JWT configuration for Convex
+│   ├── http.ts             # HTTP routes (Clerk webhook endpoint)
+│   ├── helpers.ts          # authedQuery / authedMutation wrappers
+│   ├── users.ts            # User management + Clerk sync
+│   ├── places.ts           # Place data with geospatial indexing
+│   ├── maps/
+│   │   ├── index.ts        # Map CRUD + duplicate logic
+│   │   ├── markers.ts      # Marker CRUD
+│   │   ├── collections.ts  # Collection CRUD
+│   │   ├── paths.ts        # Path CRUD
+│   │   ├── labels.ts       # Label CRUD
+│   │   └── mapUsers.ts     # User-to-map relationships and sharing
+│   └── _generated/         # Auto-generated Convex API types (do not edit)
+├── zod-schemas/
+│   ├── shared-schemas.ts   # Shared Convex fields (_id, _creationTime helpers)
+│   ├── maps-schema.ts      # Map, marker, collection, path, label Zod schemas
+│   ├── places-schema.ts    # Place and review Zod schemas
+│   ├── auth-schema.ts      # User / auth Zod schemas
+│   └── paths-schema.ts     # Route/path specific schemas
+├── helpers/
+│   ├── index.ts            # Public helpers exports
+│   ├── rbac.ts             # Role-based access control (canPerformAction)
+│   └── admin-helpers.ts    # Admin-only helper utilities
+└── types/                  # Custom TypeScript types
+```
+
+## Key Patterns
+
+### Authenticated Functions
+
+All user-facing Convex functions are wrapped with `authedQuery` or `authedMutation` from `convex/helpers.ts`. These wrappers verify the Clerk JWT, look up the user record, and inject `ctx.user` — so individual functions never need to repeat auth boilerplate.
+
+```typescript
+import { authedMutation, authedQuery } from "./helpers";
+import { v } from "convex/values";
+
+export const getMap = authedQuery({
+  args: { mapId: v.id("maps") },
+  handler: async (ctx, args) => {
+    // ctx.user is the authenticated user — always present
+    return await ctx.db.get(args.mapId);
+  },
+});
+```
+
+<Tip>
+  When adding new Convex functions, always use `authedMutation` / `authedQuery`
+  for user-facing operations and `internalMutation` / `internalQuery` for
+  server-side logic that should never be called directly from a client.
+</Tip>
+
+### Zod Schemas as Single Source of Truth
+
+Zod schemas in `packages/backend/zod-schemas/` drive both the Convex table schema (via `zodToConvex`) and runtime validation in queries and mutations. This keeps the database shape and validation logic in one place.
+
+```typescript
+import { zodToConvex } from "convex-helpers/server/zod";
+import { mapSchema } from "@buzztrip/backend/zod-schemas";
+
+// In schema.ts — Zod schema converted to Convex validator
+maps: defineTable(zodToConvex(mapSchema)),
+```
+
+Two helpers from `shared-schemas.ts` make this ergonomic:
+
+- **`defaultSchema(zodObject)`** — wraps a Zod object with standard Convex system fields (`_id`, `_creationTime`) for read operations
+- **`insertSchema(zodObject)`** — strips those system fields, producing a schema suitable for create and update operations
+
+### Role-Based Access Control
+
+Map-level permissions are enforced via `canPerformAction(role, 'entity:action')` in `helpers/rbac.ts`. Every map has associated `map_users` records that store a `role` for each collaborator. Before any mutating operation the role is fetched and passed through the RBAC check.
+
+## Authentication Flow
+
+BuzzTrip uses Clerk for identity and Convex for data, with the following integration:
+
+<Steps>
+  <Step title="JWT issuance">
+    Clerk issues a signed JWT using the **convex** JWT template configured in
+    your Clerk dashboard. This token contains the user's Clerk ID as the
+    `subject` claim.
+  </Step>
+  <Step title="Token forwarding">
+    In Next.js server components and route handlers, `convexNextjsOptions()`
+    from `@convex-dev/nextjs` automatically reads the Clerk session and attaches
+    the JWT to every Convex request.
+  </Step>
+  <Step title="Token validation">
+    Convex validates the JWT on every query and mutation using the public key
+    configured in `convex/auth.config.ts`. Requests with invalid or missing
+    tokens are rejected before reaching the handler.
+  </Step>
+  <Step title="User sync via webhook">
+    When a user signs up or updates their profile in Clerk, Clerk sends a
+    webhook event to the `/clerk-users-webhook` HTTP endpoint defined in
+    `convex/http.ts`. The handler upserts the user record in the Convex
+    `users` table, keeping Convex's user data in sync with Clerk.
+  </Step>
+</Steps>
+
+The webhook secret is stored as a Convex environment variable (`CLERK_WEBHOOK_SECRET`) and validated using the `svix` library on every incoming request.
+
+## Monorepo Build Pipeline
+
+Turborepo orchestrates all tasks through the pipeline defined in `turbo.json`. Key characteristics:
+
+- **`build`** respects the `^build` dependency order — packages build before the apps that consume them
+- **`dev`** tasks run concurrently and persistently (no caching), so all three dev servers (web, admin, backend) start in parallel with `bun dev`
+- **`lint`** also respects package dependency order (`^lint`)
+- All build outputs (`.next/**`, `dist/**`) are cached by Turborepo; `.next/cache/**` is excluded from the cache to keep it lean
+
+```
+bun dev
+  └── turbo dev (parallel, persistent)
+        ├── @buzztrip/web    → next dev --port 5173 --turbopack
+        ├── @buzztrip/admin  → next dev
+        └── @buzztrip/backend → convex dev
+```

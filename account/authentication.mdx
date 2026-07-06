@@ -1,0 +1,151 @@
+---
+title: "Authentication in BuzzTrip with Clerk"
+sidebarTitle: "Authentication"
+description: "BuzzTrip uses Clerk for user authentication, synced to Convex via webhooks. Learn how sign-up, sign-in, and session management work."
+---
+
+BuzzTrip delegates all user identity management to [Clerk](https://clerk.com), keeping authentication secure and fully managed while your user records live in Convex. When a user creates an account or signs in, Clerk issues a short-lived JWT that every Convex query and mutation validates server-side — so your map data is always tied to a verified identity.
+
+## How It Works
+
+<Steps>
+  <Step title="User signs up or signs in via Clerk">
+    Clerk hosts the sign-in and sign-up flows at `/sign-in` and `/sign-up` respectively. After a successful auth event, Clerk issues a signed JWT.
+  </Step>
+  <Step title="Clerk issues a JWT with the convex template">
+    The token is generated using the `convex` JWT template configured in your Clerk dashboard. This template shapes the claims Convex needs to verify the request.
+  </Step>
+  <Step title="Next.js server retrieves the token">
+    On the server, `getAuthToken()` calls Clerk's `auth().getToken({ template: "convex" })` and passes the result into `convexNextjsOptions()`, which builds the Convex client configuration containing both the deployment URL (`NEXT_PUBLIC_CONVEX_URL`) and the bearer token.
+  </Step>
+  <Step title="Convex validates the JWT on every request">
+    Convex checks the token against the `CLERK_FRONTEND_API_URL` domain configured in `auth.config.ts`. Every query and mutation that requires a logged-in user will fail immediately if the token is missing or expired.
+  </Step>
+  <Step title="Clerk fires a user.created webhook on new sign-up">
+    When a brand-new user completes sign-up, Clerk sends a `user.created` event to the BuzzTrip Convex HTTP endpoint at `POST /clerk-users-webhook`. The webhook handler calls `internal.users.createUser` with the raw Clerk `UserJSON` payload.
+  </Step>
+  <Step title="Convex creates the user record and a default map">
+    `createUser` inserts the user document into the `users` table and, in parallel, creates a default map titled **"Main map"** (description: *"The starting point to the next adventure!"*) and sends a welcome email via Resend.
+  </Step>
+</Steps>
+
+## User Record Fields
+
+The `userSchema` (defined in `zod-schemas/auth-schema.ts`) describes every field stored for each BuzzTrip user in Convex:
+
+| Field | Type | Notes |
+|---|---|---|
+| `clerkUserId` | `string` | The Clerk user ID — used as the primary lookup key |
+| `name` | `string` | Full name, constructed as `first_name + " " + last_name` |
+| `first_name` | `string` (optional) | Given name from Clerk profile |
+| `last_name` | `string` (optional) | Family name from Clerk profile |
+| `email` | `string` | Primary email address from Clerk |
+| `username` | `string` (optional) | Clerk username, if set |
+| `image` | `string` | Profile image URL from Clerk (`image_url`) |
+| `updatedAt` | `string` | ISO timestamp of the last sync from Clerk |
+| `bio` | `string` (optional) | User-provided biography |
+| `isBetaUser` | `boolean` (optional) | Early-access flag — see note below |
+
+<Note>
+  Users with `isBetaUser: true` on their account have been enrolled in the BuzzTrip beta programme. This flag is used for quick permission checks without joining additional tables, and gates early-access features as they are released.
+</Note>
+
+## Session Helpers
+
+Three server-side helpers in `apps/web/src/lib/auth.ts` abstract Clerk and Convex session handling:
+
+<Accordion title="getAuthToken()">
+  Retrieves the Clerk JWT scoped to the `convex` template. Returns `undefined` if the user is not signed in.
+
+  ```ts
+  import { auth } from "@clerk/nextjs/server";
+
+  export async function getAuthToken() {
+    const session = await auth();
+    const token = await session.getToken({ template: "convex" });
+    return token ?? undefined;
+  }
+  ```
+</Accordion>
+
+<Accordion title="convexNextjsOptions()">
+  Returns a `NextjsOptions` object containing the Convex deployment URL and the current auth token. Pass this to any `fetchQuery` or `fetchMutation` call from Next.js Server Components or Route Handlers.
+
+  ```ts
+  import { type NextjsOptions } from "convex/nextjs";
+  import { env } from "env";
+
+  export async function convexNextjsOptions(): Promise<NextjsOptions> {
+    const token = await getAuthToken();
+    return {
+      url: env.NEXT_PUBLIC_CONVEX_URL,
+      token: token,
+    };
+  }
+  ```
+</Accordion>
+
+<Accordion title="getConvexServerSession()">
+  Runs the `api.users.userLoginStatus` Convex query server-side and returns one of three states:
+
+  | Message | Meaning |
+  |---|---|
+  | `"No JWT Token"` | The request carries no Clerk token — user has not started the login flow |
+  | `"No Clerk User"` | A valid token exists but Convex has not yet received the `user.created` webhook |
+  | `"Logged In"` | Token is valid and the user document exists in Convex |
+
+  ```ts
+  import { fetchQuery } from "convex/nextjs";
+  import { api } from "@buzztrip/backend/api";
+
+  export async function getConvexServerSession() {
+    const options = await convexNextjsOptions();
+    return await fetchQuery(api.users.userLoginStatus, {}, options);
+  }
+  ```
+</Accordion>
+
+## Webhook Setup
+
+The Clerk → Convex sync is driven by a webhook registered in your Clerk dashboard. The Convex HTTP router exposes a single endpoint that handles all user lifecycle events:
+
+```
+POST /clerk-users-webhook
+```
+
+The handler verifies the request using [Svix](https://svix.com) signature validation, then dispatches to the appropriate internal mutation:
+
+| Clerk Event | Convex Mutation |
+|---|---|
+| `user.created` | `internal.users.createUser` |
+| `user.updated` | `internal.users.updateUser` |
+| `user.deleted` | `internal.users.deleteUser` |
+
+### Environment Variables
+
+For self-hosting or local development, set the following environment variables:
+
+```bash
+# Convex deployment
+CLERK_WEBHOOK_SECRET=whsec_...        # Svix signing secret from Clerk dashboard
+CLERK_FRONTEND_API_URL=https://...    # Your Clerk Frontend API domain
+
+# Next.js app
+NEXT_PUBLIC_CONVEX_URL=https://...    # Your Convex deployment URL
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+CLERK_SECRET_KEY=sk_...
+
+# Sign-in / sign-up redirect URLs (defaults shown)
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
+```
+
+<Warning>
+  Never expose `CLERK_SECRET_KEY` or `CLERK_WEBHOOK_SECRET` to the browser. Both are server-only values.
+</Warning>
+
+## Protected Routes
+
+BuzzTrip uses Clerk middleware to enforce authentication. All routes under `/app/*` require a valid session — unauthenticated visitors are redirected to `/sign-in` automatically. Public marketing pages (`/`, `/pricing`, `/sign-in`, `/sign-up`, etc.) are accessible without a session.

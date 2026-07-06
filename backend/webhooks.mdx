@@ -1,0 +1,208 @@
+---
+title: "Webhooks: Syncing Clerk Users to Convex"
+sidebarTitle: "Webhooks"
+description: "BuzzTrip uses a Clerk webhook to sync user data to Convex on user.created, user.updated, and user.deleted events. Setup and validation guide."
+---
+
+BuzzTrip uses a single HTTP webhook endpoint to keep Convex user records in sync with Clerk. When a user's account is created, updated, or deleted in Clerk, a signed webhook payload is delivered to the Convex HTTP router, which validates the signature and dispatches the appropriate internal mutation. Without this webhook, authenticated users will have no Convex user record and all data operations will fail.
+
+## Endpoint
+
+```
+POST /clerk-users-webhook
+```
+
+This route is registered in `convex/http.ts` and served at your Convex HTTP deployment URL (distinct from your Convex query/mutation URL — it ends in `.convex.site` rather than `.convex.cloud`).
+
+**Full URL format:**
+```
+https://<your-deployment>.convex.site/clerk-users-webhook
+```
+
+---
+
+## Supported Events
+
+| Event | Internal Mutation | What Happens |
+|---|---|---|
+| `user.created` | `internal.users.createUser` | Creates user record, sends welcome email, creates default "Main map" |
+| `user.updated` | `internal.users.updateUser` | Patches name, email, image, username, and `updatedAt` on the user document |
+| `user.deleted` | `internal.users.deleteUser` | Deletes the user record from Convex (logs warning if not found) |
+| All other events | — | Logged and ignored |
+
+---
+
+## Webhook Validation
+
+Incoming webhook requests are validated using the [Svix](https://svix.com/) library before any mutation is run. The handler reads the raw request body and verifies the Svix signature headers against `CLERK_WEBHOOK_SECRET`.
+
+**Required headers** (sent automatically by Clerk):
+
+| Header | Description |
+|---|---|
+| `svix-id` | Unique message ID for idempotency |
+| `svix-timestamp` | Unix timestamp of the delivery attempt |
+| `svix-signature` | HMAC-SHA256 signature over `svix-id.svix-timestamp.body` |
+
+If validation fails (missing headers, bad signature, replayed message), the handler returns HTTP `400` and no mutation is run. On success it returns HTTP `200`.
+
+```typescript convex/http.ts
+import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
+import { Webhook } from "svix";
+import { internal } from "./_generated/api";
+
+const http = httpRouter();
+
+http.route({
+  path: "/clerk-users-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const event = await validateRequest(request);
+    if (!event) {
+      return new Response("Error occured", { status: 400 });
+    }
+
+    switch (event.type) {
+      case "user.created":
+        await ctx.runMutation(internal.users.createUser, { data: event.data });
+        break;
+      case "user.updated":
+        await ctx.runMutation(internal.users.updateUser, { data: event.data });
+        break;
+      case "user.deleted":
+        await ctx.runMutation(internal.users.deleteUser, { id: event.data.id! });
+        break;
+      default:
+        console.log("ignored Clerk webhook event", event.type);
+    }
+
+    return new Response(null, { status: 200 });
+  }),
+});
+
+async function validateRequest(req: Request) {
+  const payloadString = await req.text();
+  const svixHeaders = {
+    "svix-id": req.headers.get("svix-id")!,
+    "svix-timestamp": req.headers.get("svix-timestamp")!,
+    "svix-signature": req.headers.get("svix-signature")!,
+  };
+  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+  try {
+    return wh.verify(payloadString, svixHeaders);
+  } catch {
+    return undefined;
+  }
+}
+```
+
+<Warning>
+  If the webhook is not configured, new users will be authenticated by Clerk but will have no user record in Convex. All `authedQuery` and `authedMutation` calls will fail with an error, and `userLoginStatus` will return `{ message: "No Clerk User", user: null }` indefinitely.
+</Warning>
+
+---
+
+## Setup
+
+<Steps>
+  <Step title="Find your Convex HTTP URL">
+    Open your [Convex dashboard](https://dashboard.convex.dev), select your deployment, and go to **Settings**. Your HTTP Actions URL looks like:
+
+    ```
+    https://<your-deployment>.convex.site
+    ```
+
+    This is different from the `NEXT_PUBLIC_CONVEX_URL` in your `.env.local`, which ends in `.convex.cloud`.
+  </Step>
+
+  <Step title="Open Clerk Webhooks">
+    In your [Clerk dashboard](https://dashboard.clerk.com), navigate to **Webhooks** in the left sidebar, then click **Add Endpoint**.
+  </Step>
+
+  <Step title="Set the endpoint URL">
+    Paste your webhook URL into the **Endpoint URL** field:
+
+    ```
+    https://<your-deployment>.convex.site/clerk-users-webhook
+    ```
+  </Step>
+
+  <Step title="Select events">
+    Under **Subscribe to events**, enable the following three events:
+
+    - `user.created`
+    - `user.updated`
+    - `user.deleted`
+
+    No other events need to be selected — all others are ignored by the handler.
+  </Step>
+
+  <Step title="Copy the Webhook Secret">
+    After saving the endpoint, Clerk will display a **Signing Secret** (starts with `whsec_`). Copy it — you will need it in the next step.
+  </Step>
+
+  <Step title="Set CLERK_WEBHOOK_SECRET in Convex">
+    In your Convex dashboard, go to **Settings → Environment Variables** and add:
+
+    | Key | Value |
+    |---|---|
+    | `CLERK_WEBHOOK_SECRET` | `whsec_...` (the secret you copied from Clerk) |
+
+    This variable must be set in the Convex dashboard, not in your local `.env.local` file. Convex functions do not have access to your Next.js environment variables.
+  </Step>
+</Steps>
+
+---
+
+## Testing the Webhook
+
+<Tabs>
+  <Tab title="Clerk Dashboard">
+    Clerk provides a built-in test tool for registered endpoints. In your Clerk dashboard:
+
+    1. Go to **Webhooks** and select your endpoint
+    2. Click **Testing** in the top tab bar
+    3. Select `user.created` from the event dropdown
+    4. Click **Send Example** and check the response
+
+    A successful delivery shows HTTP `200`. If you see `400`, check that `CLERK_WEBHOOK_SECRET` is set correctly in Convex.
+  </Tab>
+
+  <Tab title="Live Sign-Up">
+    The simplest real-world test is to create a new user account through the BuzzTrip sign-up flow:
+
+    1. Sign up with a new email address
+    2. Check the Convex dashboard → **Data → users** table for the new record
+    3. Verify a "Main map" was created in the **maps** table
+
+    If the user record does not appear within a few seconds, check the Clerk webhook delivery logs for errors.
+  </Tab>
+</Tabs>
+
+---
+
+## Troubleshooting
+
+<Expandable title="User signed up but has no Convex record">
+  Check the following:
+
+  1. **Webhook endpoint registered?** — Confirm the endpoint appears in your Clerk dashboard under **Webhooks**.
+  2. **Correct URL?** — The URL must end in `.convex.site`, not `.convex.cloud`.
+  3. **Events selected?** — Make sure `user.created` is checked.
+  4. **`CLERK_WEBHOOK_SECRET` set?** — Verify the variable exists in the Convex dashboard under **Settings → Environment Variables**.
+  5. **Delivery logs** — In your Clerk dashboard, click the endpoint and check the **Logs** tab for failed delivery attempts and response codes.
+</Expandable>
+
+<Expandable title="Webhook returns 400">
+  A `400` response means signature validation failed. This usually means:
+
+  - `CLERK_WEBHOOK_SECRET` in Convex does not match the **Signing Secret** shown in your Clerk endpoint settings
+  - The secret was rotated in Clerk but not updated in Convex
+
+  Copy the signing secret again from Clerk and update the Convex environment variable.
+</Expandable>
+
+<Expandable title="User updates not reflected in Convex">
+  Ensure the `user.updated` event is selected in your Clerk webhook endpoint settings. Profile changes made directly in the Clerk dashboard will fire this event; some OAuth profile changes may take a moment to propagate.
+</Expandable>

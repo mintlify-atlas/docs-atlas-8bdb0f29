@@ -1,0 +1,76 @@
+---
+title: "Contributing to BuzzTrip Open Source Project"
+sidebarTitle: "Overview"
+description: "BuzzTrip is AGPL-3.0 licensed and welcomes contributions. Learn the guidelines, code of conduct, and how to submit issues and pull requests."
+---
+
+BuzzTrip is an open-source collaborative mapping platform licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. Community contributions — whether bug fixes, new features, documentation improvements, or issue reports — are warmly welcomed and help make BuzzTrip better for everyone.
+
+## License
+
+BuzzTrip is released under the **AGPL-3.0** license. This is a strong copyleft license designed to ensure that the community always benefits from improvements to the software.
+
+<Note>
+  AGPL-3.0 means that if you run a modified version of BuzzTrip publicly (e.g.,
+  as a hosted service), you **must** release your modified source code under the
+  same AGPL-3.0 license. Simply using the software internally does not trigger
+  this requirement.
+</Note>
+
+## Ways to Contribute
+
+There are several ways to get involved with BuzzTrip, no matter your experience level:
+
+<CardGroup cols={2}>
+  <Card title="Report Bugs" icon="bug">
+    Open a GitHub Issue describing the problem, steps to reproduce it, and your
+    environment. Clear, reproducible bug reports are incredibly valuable.
+  </Card>
+  <Card title="Request Features" icon="lightbulb">
+    Submit a GitHub Issue outlining the feature, the problem it solves, and any
+    relevant context. Discussion on the issue before building saves everyone
+    time.
+  </Card>
+  <Card title="Submit Pull Requests" icon="code-pull-request">
+    Fork the repo, make your changes on a feature branch, and open a PR against
+    `main`. Keep PRs focused and small — one logical change per PR is ideal.
+  </Card>
+  <Card title="Improve Documentation" icon="book">
+    Spotted a gap, typo, or outdated section? Documentation PRs are just as
+    valuable as code PRs and are a great first contribution.
+  </Card>
+</CardGroup>
+
+## Before You Start
+
+To avoid duplicating effort, always **check existing issues and open pull requests** before beginning work on a bug fix or feature. If you plan to tackle something non-trivial, open an issue first to discuss your approach and get early feedback from maintainers.
+
+## Code Standards
+
+All contributions to BuzzTrip must adhere to the following standards to keep the codebase consistent and maintainable:
+
+- **TypeScript throughout** — every package and application is written in strict TypeScript. Do not introduce untyped JavaScript files.
+- **Prettier for formatting** — code is auto-formatted using Prettier with the `prettier-plugin-tailwindcss` and `prettier-plugin-organize-imports` plugins. Run the formatter before committing:
+  ```bash
+  bun format
+  ```
+- **ESLint for linting** — lint rules are enforced via ESLint (Next.js config) plus `sherif` for monorepo dependency consistency. Run the full lint suite with:
+  ```bash
+  bun lint
+  ```
+- **Follow existing patterns** — before adding a new file or feature, check how similar things are done in the codebase. Consistency is preferred over novelty.
+
+## Commit Style
+
+Commit messages should be **concise and clear**. Sacrifice perfect grammar in favour of brevity — a short, scannable message is better than a long, grammatically correct one.
+
+Good examples:
+```
+fix: marker drag not persisting on mobile
+feat: add collection colour picker
+chore: bump convex to 1.27.5
+```
+
+## Getting Started
+
+Ready to run BuzzTrip on your machine? Head over to the [Development Setup](/contributing/development-setup) guide for a step-by-step walkthrough covering prerequisites, environment variables, and running the dev servers.

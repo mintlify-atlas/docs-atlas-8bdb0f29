@@ -1,0 +1,363 @@
+---
+title: "Markers API: Create, View, Edit, and Delete Pins"
+sidebarTitle: "Markers"
+description: "Convex queries and mutations for managing map markers. Supports place data lookup, collection assignment, and icon/color customization."
+---
+
+Markers are the primary way users annotate locations on a BuzzTrip map. Every marker is linked to a `places` record — a de-duplicated store of geographic point-of-interest data. When a marker is created, the backend checks whether a place already exists at the given coordinates before inserting a new one.
+
+Markers can also be assigned to one or more collections, which are managed via `collection_links` join records. This makes it easy to group related pins (e.g. "Restaurants", "Hotels") without duplicating the marker itself.
+
+All operations require authentication via the `authedQuery` / `authedMutation` wrappers.
+
+---
+
+## getMarkersView
+
+Retrieves all markers on a map enriched with their associated place data, forming a `CombinedMarker` array. An optional `markerId` filter returns only that single marker.
+
+Position (`lat` / `lng`) on the returned object is sourced from the linked **place** record when available, falling back to the value stored directly on the marker.
+
+**API path:** `api.maps.markers.getMarkersView`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose markers should be fetched.
+</ParamField>
+<ParamField path="markerId" type="Id<'markers'>">
+  Optional. When provided, only the matching marker is returned.
+</ParamField>
+
+**Returns:** `CombinedMarker[] | null`
+
+<Expandable title="CombinedMarker fields">
+  <ResponseField name="_id" type="Id<'markers'>">
+    Unique marker document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) of marker creation.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Display title for the marker.
+  </ResponseField>
+  <ResponseField name="note" type="string | undefined">
+    Optional user note attached to the marker.
+  </ResponseField>
+  <ResponseField name="lat" type="number">
+    Latitude — sourced from the linked place if available, otherwise from the marker record.
+  </ResponseField>
+  <ResponseField name="lng" type="number">
+    Longitude — sourced from the linked place if available, otherwise from the marker record.
+  </ResponseField>
+  <ResponseField name="icon" type="IconType | string">
+    Icon identifier for the marker pin.
+  </ResponseField>
+  <ResponseField name="color" type="string">
+    Hex or named color string for the marker pin.
+  </ResponseField>
+  <ResponseField name="map_id" type="Id<'maps'>">
+    The map this marker belongs to.
+  </ResponseField>
+  <ResponseField name="place_id" type="Id<'places'>">
+    The linked place document ID.
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string | undefined">
+    ISO 8601 datetime of the last update.
+  </ResponseField>
+  <ResponseField name="place" type="Place">
+    The full place document merged into the marker.
+
+    <Expandable title="place fields">
+      <ResponseField name="title" type="string">
+        Name of the place (e.g. `"Eiffel Tower"`).
+      </ResponseField>
+      <ResponseField name="lat" type="number">
+        Latitude of the place.
+      </ResponseField>
+      <ResponseField name="lng" type="number">
+        Longitude of the place.
+      </ResponseField>
+      <ResponseField name="address" type="string | undefined">
+        Street address.
+      </ResponseField>
+      <ResponseField name="bounds" type="{ east, north, south, west } | { lat, lng } | null">
+        Geographic bounds or a single lat/lng fallback.
+      </ResponseField>
+      <ResponseField name="description" type="string | undefined">
+        Optional place description.
+      </ResponseField>
+      <ResponseField name="gm_place_id" type="string | undefined">
+        Google Maps place ID.
+      </ResponseField>
+      <ResponseField name="mb_place_id" type="string | undefined">
+        Mapbox place ID.
+      </ResponseField>
+      <ResponseField name="fq_place_id" type="string | undefined">
+        Foursquare place ID.
+      </ResponseField>
+      <ResponseField name="rating" type="number">
+        Aggregate rating for the place.
+      </ResponseField>
+      <ResponseField name="types" type="string[] | null | undefined">
+        Place type tags (e.g. `["restaurant", "food"]`).
+      </ResponseField>
+      <ResponseField name="website" type="string | undefined">
+        Place website URL.
+      </ResponseField>
+      <ResponseField name="phone" type="string | undefined">
+        Contact phone number.
+      </ResponseField>
+      <ResponseField name="photos" type="string[] | null | undefined">
+        Array of photo URLs.
+      </ResponseField>
+      <ResponseField name="icon" type="IconType | string">
+        Icon derived from the place's POI category.
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+// All markers on the map
+const markers = useQuery(api.maps.markers.getMarkersView, { mapId });
+
+// Single marker
+const single = useQuery(api.maps.markers.getMarkersView, {
+  mapId,
+  markerId: "marker_xyz" as Id<"markers">,
+});
+
+markers?.forEach((m) => {
+  console.log(m.title, m.lat, m.lng, m.place.address);
+});
+```
+
+---
+
+## createMarker
+
+Inserts a new marker onto a map. Before inserting, the backend checks whether a `places` record already exists at the provided `lat`/`lng` coordinates using the `by_place_lat_lng` index. If no existing place is found, a new one is created via `createPlace`. This de-duplicates geographic POI data across all maps.
+
+After the marker is inserted, `collection_links` join records are created for each ID in `collectionIds`.
+
+**API path:** `api.maps.markers.createMarker`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map to add the marker to.
+</ParamField>
+<ParamField path="marker" type="CombinedMarker" required>
+  The marker data, including embedded place information.
+
+  <Expandable title="marker fields">
+    <ParamField path="marker.title" type="string" required>
+      Display title for the marker.
+    </ParamField>
+    <ParamField path="marker.note" type="string">
+      Optional user note.
+    </ParamField>
+    <ParamField path="marker.lat" type="number" required>
+      Latitude of the marker. Also used for place deduplication lookup.
+    </ParamField>
+    <ParamField path="marker.lng" type="number" required>
+      Longitude of the marker. Also used for place deduplication lookup.
+    </ParamField>
+    <ParamField path="marker.icon" type="IconType | string" required>
+      Icon identifier for the marker pin.
+    </ParamField>
+    <ParamField path="marker.color" type="string" required>
+      Color string for the marker pin.
+    </ParamField>
+    <ParamField path="marker.place_id" type="Id<'places'>">
+      Optional. If you already know the place ID, you can supply it directly.
+    </ParamField>
+    <ParamField path="marker.place" type="object" required>
+      Place data used to create a new `places` record if one does not yet exist at these coordinates.
+
+      <Expandable title="place fields">
+        <ParamField path="marker.place.title" type="string" required>
+          Name of the place.
+        </ParamField>
+        <ParamField path="marker.place.lat" type="number" required>
+          Latitude.
+        </ParamField>
+        <ParamField path="marker.place.lng" type="number" required>
+          Longitude.
+        </ParamField>
+        <ParamField path="marker.place.address" type="string">
+          Street address.
+        </ParamField>
+        <ParamField path="marker.place.bounds" type="Bounds | null">
+          Geographic bounds. Falls back to `{ lat, lng }` if not provided.
+        </ParamField>
+        <ParamField path="marker.place.icon" type="IconType | string" required>
+          Icon for the place's POI category.
+        </ParamField>
+        <ParamField path="marker.place.rating" type="number">
+          Place rating.
+        </ParamField>
+        <ParamField path="marker.place.gm_place_id" type="string">
+          Google Maps place ID.
+        </ParamField>
+        <ParamField path="marker.place.website" type="string">
+          Place website URL.
+        </ParamField>
+        <ParamField path="marker.place.types" type="string[]">
+          POI type tags.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    <ParamField path="marker.updatedAt" type="string">
+      Optional ISO 8601 datetime string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+<ParamField path="collectionIds" type="string[]">
+  Optional list of collection IDs to link the new marker to. A `collection_links` record is inserted for each entry.
+</ParamField>
+
+**Returns:** `Id<'markers'>` — the document ID of the newly created marker.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createMarker = useMutation(api.maps.markers.createMarker);
+
+const markerId = await createMarker({
+  mapId: "abc123" as Id<"maps">,
+  marker: {
+    title: "Senso-ji Temple",
+    note: "Amazing at sunrise, very crowded by 9am",
+    lat: 35.7148,
+    lng: 139.7967,
+    icon: "Landmark",
+    color: "#e85d04",
+    place: {
+      title: "Senso-ji Temple",
+      lat: 35.7148,
+      lng: 139.7967,
+      address: "2-3-1 Asakusa, Taito City, Tokyo",
+      icon: "Landmark",
+      rating: 4.7,
+      gm_place_id: "ChIJ8T1GpMGOGGARDYGSgpooDWw",
+      types: ["place_of_worship", "tourist_attraction"],
+      bounds: null,
+    },
+  },
+  collectionIds: ["collection_temples" as Id<"collections">],
+});
+
+console.log("Created marker:", markerId);
+```
+
+---
+
+## editMarker
+
+Updates an existing marker's fields and/or adjusts its collection assignments. Collection links can be added and removed in the same call.
+
+**API path:** `api.maps.markers.editMarker`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="marker_id" type="Id<'markers'>" required>
+  The marker to update.
+</ParamField>
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map the marker belongs to. Required when creating new `collection_links`.
+</ParamField>
+<ParamField path="marker" type="Partial<markersEditSchema>" required>
+  Any subset of marker fields to update. All fields are optional.
+
+  <Expandable title="Updatable fields">
+    <ParamField path="marker.title" type="string">
+      New display title.
+    </ParamField>
+    <ParamField path="marker.note" type="string">
+      New note text.
+    </ParamField>
+    <ParamField path="marker.lat" type="number">
+      Updated latitude.
+    </ParamField>
+    <ParamField path="marker.lng" type="number">
+      Updated longitude.
+    </ParamField>
+    <ParamField path="marker.icon" type="IconType | string">
+      New icon identifier.
+    </ParamField>
+    <ParamField path="marker.color" type="string">
+      New color string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+<ParamField path="collectionIds_to_add" type="Id<'collections'>[]">
+  Optional list of collection IDs to link to this marker. A new `collection_links` record is inserted for each.
+</ParamField>
+<ParamField path="collectionIds_to_remove" type="Id<'collections'>[]">
+  Optional list of collection IDs to unlink from this marker. The corresponding `collection_links` record is deleted.
+</ParamField>
+
+**Returns:** `{ collectionLinksDeleted: string[]; collectionLinksCreated: string[] | null }`
+
+<Expandable title="Response fields">
+  <ResponseField name="collectionLinksDeleted" type="string[]">
+    Array of collection IDs for which links were successfully removed.
+  </ResponseField>
+  <ResponseField name="collectionLinksCreated" type="string[] | null">
+    Array of collection IDs for which links were successfully created, or `null` if none were added.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const editMarker = useMutation(api.maps.markers.editMarker);
+
+const result = await editMarker({
+  marker_id: "marker_xyz" as Id<"markers">,
+  mapId: "abc123" as Id<"maps">,
+  marker: {
+    note: "Best visited on weekday mornings to avoid crowds",
+    color: "#3a86ff",
+  },
+  collectionIds_to_add: ["collection_must_see" as Id<"collections">],
+  collectionIds_to_remove: ["collection_maybe" as Id<"collections">],
+});
+
+console.log("Removed links:", result.collectionLinksDeleted);
+console.log("Added links:", result.collectionLinksCreated);
+```
+
+---
+
+## deleteMarker
+
+Permanently deletes a marker document. Collection links referencing this marker are not automatically removed — handle that separately if required.
+
+**API path:** `api.maps.markers.deleteMarker`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="markerId" type="Id<'markers'>" required>
+  The document ID of the marker to delete.
+</ParamField>
+
+**Returns:** `void`
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const deleteMarker = useMutation(api.maps.markers.deleteMarker);
+
+await deleteMarker({ markerId: "marker_xyz" as Id<"markers"> });
+```

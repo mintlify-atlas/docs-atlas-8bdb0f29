@@ -1,0 +1,403 @@
+---
+title: "Paths API: Draw Lines and Shapes on Maps"
+sidebarTitle: "Paths"
+description: "Convex queries and mutations for managing map paths and shapes. Supports lines, circles, rectangles, polygons with style and measurement data."
+---
+
+Paths are vector overlays drawn directly on the map surface. BuzzTrip supports five path types — `line`, `circle`, `rectangle`, `polygon`, and `text` — each of which encodes its geometry as one or more `Position` values.
+
+A `Position` is a tuple of two or three numbers: `[longitude, latitude]` or `[longitude, latitude, altitude]`. Depending on the shape, the `points` field holds a single `Position` (e.g. the center of a circle), an array of `Position[]` (e.g. the vertices of a line or polygon ring), or a nested `Position[][]` (e.g. a polygon with holes).
+
+Measurements (area, perimeter, radius, etc.) and visual styles (stroke color, fill, opacity) are stored alongside the geometry, allowing the client to render and label shapes accurately without recomputing values.
+
+All operations require authentication via the `authedQuery` / `authedMutation` wrappers.
+
+---
+
+## Schema Reference
+
+### pathType
+
+<Expandable title="Path type values">
+  | Value | Description |
+  |---|---|
+  | `"line"` | An open polyline drawn between two or more points. |
+  | `"circle"` | A circle defined by a center point and radius. |
+  | `"rectangle"` | An axis-aligned bounding rectangle. |
+  | `"polygon"` | A closed polygon with optional holes. |
+  | `"text"` | A text annotation placed at a point. |
+</Expandable>
+
+### points (Position schema)
+
+```typescript
+// A single 2D or 3D coordinate
+type Position = [number, number] | [number, number, number];
+
+// Depending on the shape:
+type Points =
+  | Position      // single point — used for circles, text
+  | Position[]    // array of points — used for lines
+  | Position[][]  // nested array — used for polygons (ring + optional holes)
+```
+
+### measurements
+
+Each path type stores different measurement fields. All measurement objects include `perimeter` at minimum.
+
+<Expandable title="Measurement shapes by path type">
+  **`circleMeasurements`** — `circle`
+  | Field | Type | Description |
+  |---|---|---|
+  | `perimeter` | `number` | Circumference in meters. |
+  | `area` | `number` (optional) | Area in square meters. |
+  | `radius` | `number` | Radius in meters. |
+  | `diameter` | `number` | Diameter in meters. |
+
+  **`rectangleMeasurements`** — `rectangle`
+  | Field | Type | Description |
+  |---|---|---|
+  | `perimeter` | `number` | Perimeter in meters. |
+  | `area` | `number` (optional) | Area in square meters. |
+  | `width` | `number` | Width in meters. |
+  | `height` | `number` | Height in meters. |
+
+  **`lineMeasurements`** — `line`
+  | Field | Type | Description |
+  |---|---|---|
+  | `perimeter` | `number` | Total length in meters. |
+  | `area` | `number` (optional) | Not typically used for lines. |
+
+  **`polygonMeasurements`** — `polygon`
+  | Field | Type | Description |
+  |---|---|---|
+  | `perimeter` | `number` | Perimeter in meters. |
+  | `area` | `number` (optional) | Area in square meters. |
+</Expandable>
+
+### styles
+
+<Expandable title="Style fields">
+  | Field | Type | Required | Description |
+  |---|---|---|---|
+  | `strokeColor` | `string` | ✓ | Hex or named color for the border/line. |
+  | `strokeOpacity` | `number` | — | Opacity of the stroke (0–1). |
+  | `strokeWidth` | `number` | — | Width of the stroke in pixels. |
+  | `fillColor` | `string` | — | Fill color for closed shapes. |
+  | `fillOpacity` | `number` | — | Fill opacity (0–1). |
+</Expandable>
+
+---
+
+## getPathsForMap
+
+Returns all paths belonging to a map, validated against the full `pathsSchema`.
+
+**API path:** `api.maps.paths.getPathsForMap`  
+**Type:** `authedQuery` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map whose paths should be returned.
+</ParamField>
+
+**Returns:** `Path[] | null`
+
+<Expandable title="Response fields (each item)">
+  <ResponseField name="_id" type="Id<'paths'>">
+    Unique path document ID.
+  </ResponseField>
+  <ResponseField name="_creationTime" type="number">
+    Unix timestamp (ms) when the path was created.
+  </ResponseField>
+  <ResponseField name="mapId" type="Id<'maps'>">
+    The map this path belongs to.
+  </ResponseField>
+  <ResponseField name="pathType" type='"text" | "circle" | "rectangle" | "polygon" | "line"'>
+    The type of shape.
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Display title shown on the path label.
+  </ResponseField>
+  <ResponseField name="note" type="string | undefined">
+    Optional user note attached to the path.
+  </ResponseField>
+  <ResponseField name="points" type="Position | Position[] | Position[][]">
+    The geometry points for this path.
+  </ResponseField>
+  <ResponseField name="measurements" type="Measurements | undefined">
+    Optional measurement data (see schema reference above).
+  </ResponseField>
+  <ResponseField name="styles" type="PathStyle | undefined">
+    Optional visual style overrides.
+  </ResponseField>
+  <ResponseField name="createdBy" type="Id<'users'>">
+    User who created the path.
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string | undefined">
+    ISO 8601 datetime of the last update.
+  </ResponseField>
+</Expandable>
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const mapId = "abc123" as Id<"maps">;
+
+const paths = useQuery(api.maps.paths.getPathsForMap, { mapId });
+
+paths?.forEach((p) => {
+  console.log(p.pathType, p.title, p.points);
+});
+```
+
+---
+
+## createPath
+
+Inserts a new path onto a map. The `createdBy` field is automatically injected from the authenticated user context — you must **not** include it in your arguments.
+
+**API path:** `api.maps.paths.createPath`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="mapId" type="Id<'maps'>" required>
+  The map to draw the path on.
+</ParamField>
+<ParamField path="pathType" type='"text" | "circle" | "rectangle" | "polygon" | "line"' required>
+  The type of shape to create.
+</ParamField>
+<ParamField path="title" type="string" required>
+  Display label for the path.
+</ParamField>
+<ParamField path="points" type="Position | Position[] | Position[][]" required>
+  Geometry data. A single `Position` for a circle or text annotation; `Position[]` for a line; `Position[][]` for a polygon.
+</ParamField>
+<ParamField path="note" type="string">
+  Optional note attached to this path.
+</ParamField>
+<ParamField path="measurements" type="Measurements">
+  Optional measurement data. Provide the appropriate shape for the `pathType` (see schema reference above).
+</ParamField>
+<ParamField path="styles" type="PathStyle">
+  Optional visual styles.
+
+  <Expandable title="Style fields">
+    <ParamField path="styles.strokeColor" type="string" required>
+      Border/line color.
+    </ParamField>
+    <ParamField path="styles.strokeOpacity" type="number">
+      Stroke opacity (0–1).
+    </ParamField>
+    <ParamField path="styles.strokeWidth" type="number">
+      Stroke width in pixels.
+    </ParamField>
+    <ParamField path="styles.fillColor" type="string">
+      Fill color for closed shapes.
+    </ParamField>
+    <ParamField path="styles.fillOpacity" type="number">
+      Fill opacity (0–1).
+    </ParamField>
+  </Expandable>
+</ParamField>
+<ParamField path="updatedAt" type="string">
+  Optional ISO 8601 datetime string.
+</ParamField>
+
+**Returns:** `Id<'paths'>` — the document ID of the newly created path.
+
+<CodeGroup>
+
+```typescript Line
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createPath = useMutation(api.maps.paths.createPath);
+
+// Draw a walking route between two points
+const pathId = await createPath({
+  mapId: "abc123" as Id<"maps">,
+  pathType: "line",
+  title: "Walk to Asakusa",
+  points: [
+    [139.7016, 35.6586],
+    [139.7967, 35.7148],
+  ],
+  measurements: {
+    perimeter: 12400,
+  },
+  styles: {
+    strokeColor: "#3a86ff",
+    strokeWidth: 3,
+    strokeOpacity: 0.85,
+  },
+});
+
+console.log("Created path:", pathId);
+```
+
+```typescript Circle
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createPath = useMutation(api.maps.paths.createPath);
+
+// Draw a 500m radius circle around Shinjuku Station
+const pathId = await createPath({
+  mapId: "abc123" as Id<"maps">,
+  pathType: "circle",
+  title: "Shinjuku 500m radius",
+  points: [139.7003, 35.6896], // center point
+  measurements: {
+    perimeter: 3141.6,
+    area: 785398,
+    radius: 500,
+    diameter: 1000,
+  },
+  styles: {
+    strokeColor: "#e63946",
+    fillColor: "#e63946",
+    fillOpacity: 0.15,
+  },
+});
+```
+
+```typescript Polygon
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const createPath = useMutation(api.maps.paths.createPath);
+
+// Draw a polygon around a neighborhood
+const pathId = await createPath({
+  mapId: "abc123" as Id<"maps">,
+  pathType: "polygon",
+  title: "Shibuya Area",
+  // Position[][] — outer ring
+  points: [[
+    [139.6917, 35.6580],
+    [139.7070, 35.6580],
+    [139.7070, 35.6650],
+    [139.6917, 35.6650],
+    [139.6917, 35.6580],
+  ]],
+  measurements: {
+    perimeter: 6200,
+    area: 980000,
+  },
+  styles: {
+    strokeColor: "#2a9d8f",
+    strokeWidth: 2,
+    fillColor: "#2a9d8f",
+    fillOpacity: 0.1,
+  },
+});
+```
+
+</CodeGroup>
+
+---
+
+## editPath
+
+Replaces the fields of an existing path and stamps `updatedAt` with the current ISO datetime. The full `pathsEditSchema` is accepted (minus system fields `_id` and `_creationTime`).
+
+**API path:** `api.maps.paths.editPath`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="pathId" type="Id<'paths'>" required>
+  The path to update.
+</ParamField>
+<ParamField path="path" type="pathsEditSchema" required>
+  The updated path data. All fields from `pathsEditSchema` are accepted except `_id` and `_creationTime`.
+
+  <Expandable title="path fields">
+    <ParamField path="path.mapId" type="Id<'maps'>" required>
+      The map this path belongs to.
+    </ParamField>
+    <ParamField path="path.pathType" type='"text" | "circle" | "rectangle" | "polygon" | "line"' required>
+      The path type.
+    </ParamField>
+    <ParamField path="path.title" type="string" required>
+      Updated display title.
+    </ParamField>
+    <ParamField path="path.points" type="Position | Position[] | Position[][]" required>
+      Updated geometry data.
+    </ParamField>
+    <ParamField path="path.note" type="string">
+      Updated note.
+    </ParamField>
+    <ParamField path="path.measurements" type="Measurements">
+      Updated measurements.
+    </ParamField>
+    <ParamField path="path.styles" type="PathStyle">
+      Updated visual styles.
+    </ParamField>
+    <ParamField path="path.createdBy" type="Id<'users'>">
+      Optional — the original creator's user ID.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `Id<'paths'>` — the ID of the updated path.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const editPath = useMutation(api.maps.paths.editPath);
+
+const pathId = await editPath({
+  pathId: "path_xyz" as Id<"paths">,
+  path: {
+    mapId: "abc123" as Id<"maps">,
+    pathType: "line",
+    title: "Walk to Asakusa (updated)",
+    points: [
+      [139.7016, 35.6586],
+      [139.7500, 35.6900],
+      [139.7967, 35.7148],
+    ],
+    measurements: {
+      perimeter: 13800,
+    },
+    styles: {
+      strokeColor: "#e85d04",
+      strokeWidth: 4,
+    },
+  },
+});
+
+console.log("Updated path:", pathId);
+```
+
+---
+
+## deletePath
+
+Permanently deletes a path document.
+
+**API path:** `api.maps.paths.deletePath`  
+**Type:** `authedMutation` — authentication required
+
+<ParamField path="pathId" type="Id<'paths'>" required>
+  The document ID of the path to delete.
+</ParamField>
+
+**Returns:** `Id<'paths'>` — the ID of the deleted path.
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+const deletePath = useMutation(api.maps.paths.deletePath);
+
+const deletedId = await deletePath({ pathId: "path_xyz" as Id<"paths"> });
+
+console.log("Deleted path:", deletedId);
+```

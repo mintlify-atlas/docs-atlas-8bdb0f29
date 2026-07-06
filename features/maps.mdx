@@ -1,0 +1,143 @@
+---
+title: "Maps: Create and Manage Custom Map Projects"
+sidebarTitle: "Maps"
+description: "Create multiple custom maps with configurable visibility, map styles, and metadata. Duplicate existing maps and track views across your projects."
+---
+
+Maps are the top-level containers in BuzzTrip. Every piece of content you add — markers, collections, paths, labels, and routes — lives inside a map. You can create as many maps as you need for different trips, projects, or purposes, each with its own collaborators, visibility settings, and map style.
+
+## Map Properties
+
+When you create or edit a map, the following fields are available:
+
+<ParamField path="title" type="string" required>
+  The display name of the map. The first letter is automatically uppercased when saved.
+</ParamField>
+
+<ParamField path="description" type="string">
+  An optional longer description of the map's purpose or contents.
+</ParamField>
+
+<ParamField path="image" type="string (URL)">
+  An optional cover image URL displayed as a thumbnail for the map.
+</ParamField>
+
+<ParamField path="icon" type="icon">
+  An optional icon used to visually identify the map in listings and sidebars.
+</ParamField>
+
+<ParamField path="color" type="string (hex)">
+  An optional hex color used to accent the map in the UI.
+</ParamField>
+
+<ParamField path="visibility" type="string" required>
+  Controls who can access the map. One of `private`, `public`, or `unlisted`. See [Visibility Levels](#visibility-levels) below.
+</ParamField>
+
+<ParamField path="mapTypeId" type="string">
+  The base map style to use. One of `hybrid`, `roadmap`, `satellite`, or `terrain`. Defaults to `hybrid` if not specified.
+</ParamField>
+
+<ParamField path="location_name" type="string">
+  An optional human-readable place name describing where the map is based — for example, `Brisbane, Australia`.
+</ParamField>
+
+<ParamField path="lat" type="number">
+  Optional latitude for the map's initial center position.
+</ParamField>
+
+<ParamField path="lng" type="number">
+  Optional longitude for the map's initial center position.
+</ParamField>
+
+<ParamField path="bounds" type="object">
+  Optional geographic bounding box that defines the initial viewport of the map.
+</ParamField>
+
+## Visibility Levels
+
+<CardGroup cols={3}>
+  <Card title="Private" icon="lock">
+    Only the owner and explicitly invited collaborators can view or edit the map. It does not appear in search or public listings.
+  </Card>
+  <Card title="Public" icon="globe">
+    Viewable by anyone, and indexable or searchable by other BuzzTrip users. Anyone can also duplicate a public map to their own account.
+  </Card>
+  <Card title="Unlisted" icon="link">
+    Accessible to anyone who has the direct link, but not discoverable through search or public listings.
+  </Card>
+</CardGroup>
+
+## Creating a Map
+
+<Steps>
+  <Step title="Open the Maps dashboard">
+    Navigate to your BuzzTrip dashboard and click **New Map**.
+  </Step>
+  <Step title="Fill in map details">
+    Enter a title and optionally add a description, cover image, icon, color, and starting location. Choose a visibility level and map style.
+  </Step>
+  <Step title="Save the map">
+    Click **Create**. BuzzTrip calls the `createMap` Convex mutation, which automatically:
+    - Inserts the new map record with the authenticated user as `owner_id`
+    - Creates a **Default Collection** for the map via `createCollectionFunction`
+    - Adds the creating user to the map's `map_users` table with the `owner` permission role
+  </Step>
+</Steps>
+
+<Note>
+  Because BuzzTrip uses Convex as its real-time backend, all map changes — including creation — are pushed to every connected client instantly. Collaborators on the same map see updates without needing to refresh the page.
+</Note>
+
+## Duplicating a Map
+
+The `duplicateMap` function creates a full copy of an existing map under your account. The new map is titled `Copy of <original title>` and is owned by you.
+
+The duplicate includes all of the following from the original map:
+
+- Markers
+- Collections
+- Collection links (marker ↔ collection assignments)
+- Paths
+- Labels
+- Routes
+- Route stops
+
+**Permission check:** You can duplicate a map if any one of these conditions is true:
+
+1. You are the map's owner
+2. You have an active `map_users` entry for the map (editor, viewer, or commenter)
+3. The map's visibility is set to `public`
+
+If none of those conditions are met, the duplication is rejected with a permission error. If an error occurs mid-duplication, the partially created map is automatically cleaned up to prevent orphaned records.
+
+## Map Views
+
+BuzzTrip tracks map views for analytics via the `trackMapView` mutation. Each view record captures:
+
+- IP address
+- Country and city
+- Browser name and version
+- Device type
+- Operating system
+
+View history is queryable via `getMapViews` for maps you own, giving you insight into how often and from where your maps are being accessed.
+
+## Map Styles
+
+Choose a base map style that best fits your content. The `mapTypeId` field accepts one of four values:
+
+<Tabs>
+  <Tab title="Hybrid">
+    Combines satellite photography with road and label overlays. This is the **default** style when no `mapTypeId` is specified. Ideal when you need both geographic detail and navigational labels — useful for travel planning, location scouting, and event mapping.
+  </Tab>
+  <Tab title="Roadmap">
+    A classic street map with roads, cities, and points of interest rendered as stylized vector graphics. Best for urban navigation, route planning, and any use case where road network clarity matters more than terrain detail.
+  </Tab>
+  <Tab title="Satellite">
+    Pure aerial and satellite imagery without road or label overlays. Useful for detailed geographic analysis, property inspection, or when you want a clean photographic backdrop for your markers and paths.
+  </Tab>
+  <Tab title="Terrain">
+    Displays topographic information including elevation contours, mountain ranges, and natural features. Best suited for hiking, outdoor adventure planning, or any project where terrain and elevation context is important.
+  </Tab>
+</Tabs>

@@ -1,0 +1,106 @@
+---
+title: "Role-Based Permissions for Map Collaboration"
+sidebarTitle: "Permissions"
+description: "BuzzTrip uses four permission roles — owner, editor, viewer, commenter — to control who can create, edit, and delete map content."
+---
+
+Every collaborator added to a BuzzTrip map is assigned one of four roles. These roles determine precisely what actions that person can perform — from editing markers and collections through to deleting the map itself. Roles are enforced server-side in Convex so they cannot be bypassed from the client.
+
+## The Four Roles
+
+<CardGroup cols={2}>
+  <Card title="Owner" icon="crown">
+    Full control over the map. Can manage all content, invite and remove collaborators, change roles, and permanently delete the map. Every map has exactly one owner — the person who created it.
+  </Card>
+  <Card title="Editor" icon="pen-to-square">
+    Can create, edit, and delete all map content (markers, collections, labels, paths, routes) and invite or update collaborators. Cannot remove collaborators or delete the map.
+  </Card>
+  <Card title="Viewer" icon="eye">
+    Read-only access to the map and all of its content. Cannot make any changes or invite others.
+  </Card>
+  <Card title="Commenter" icon="comment">
+    Currently equivalent to Viewer. Can view all map content. Commenting and annotation features that will differentiate this role from Viewer are planned for a future release.
+  </Card>
+</CardGroup>
+
+## Permission Matrix
+
+The table below is derived directly from `rolePermissions` in `packages/backend/helpers/rbac.ts`.
+
+| Permission | Owner | Editor | Viewer | Commenter |
+|---|:---:|:---:|:---:|:---:|
+| View map | ✓ | ✓ | ✓ | ✓ |
+| Create markers | ✓ | ✓ | ✗ | ✗ |
+| Edit markers | ✓ | ✓ | ✗ | ✗ |
+| Delete markers | ✓ | ✓ | ✗ | ✗ |
+| Create collections | ✓ | ✓ | ✗ | ✗ |
+| Edit collections | ✓ | ✓ | ✗ | ✗ |
+| Delete collections | ✓ | ✓ | ✗ | ✗ |
+| Create / edit / delete labels | ✓ | ✓ | ✗ | ✗ |
+| Create / edit / delete paths | ✓ | ✓ | ✗ | ✗ |
+| Create / edit / delete routes | ✓ | ✓ | ✗ | ✗ |
+| Invite collaborators | ✓ | ✓ | ✗ | ✗ |
+| Edit collaborator roles | ✓ | ✓ | ✗ | ✗ |
+| Remove collaborators | ✓ | ✗ | ✗ | ✗ |
+| Delete map | ✓ | ✗ | ✗ | ✗ |
+| Update map settings | ✓ | ✓ | ✗ | ✗ |
+
+## The canPerformAction() Helper
+
+All permission checks throughout the Convex backend go through a single function:
+
+```ts
+import { canPerformAction } from "@buzztrip/backend/helpers/rbac";
+
+canPerformAction(role, "markers:create"); // returns boolean
+```
+
+The function looks up `role` in the `rolePermissions` record and checks whether the requested permission string is present. It returns `false` for any unknown role or permission rather than throwing.
+
+### Permission String Format
+
+Permissions follow the pattern `entity:action`:
+
+```
+<entity>:<create | update | delete>
+```
+
+**Supported entity types:**
+
+| Entity | Description |
+|---|---|
+| `maps` | The map document itself |
+| `map_users` | Collaborator records on a map |
+| `labels` | Text labels placed on the map |
+| `markers` | Point-of-interest markers |
+| `collections` | Groups of markers |
+| `collection_links` | Associations between markers and collections |
+| `routes` | Named routes on the map |
+| `route_stops` | Individual stops within a route |
+| `paths` | Drawn paths / polylines |
+
+**Example permission strings:**
+
+```ts
+"markers:create"
+"collections:delete"
+"map_users:update"
+"maps:delete"
+"paths:create"
+```
+
+## Ownership
+
+When you create a new map in BuzzTrip you are automatically assigned the `owner` role for that map. Ownership comes with two exclusive permissions that editors do not have: removing collaborators (`map_users:delete`) and deleting the map itself (`maps:delete`).
+
+<Warning>
+  Owners cannot be removed or downgraded by editors. Only the owner themselves can transfer or relinquish ownership.
+</Warning>
+
+## Sharing & Managing Collaborators
+
+To add a new collaborator, change someone's role, or remove them from a map, see the [Sharing guide](/features/sharing). All role changes take effect immediately and are reflected in real-time for all active sessions on that map.
+
+<Info>
+  The `commenter` role currently carries no additional permissions beyond viewing the map. The ability to leave comments and annotations on markers and paths is on the BuzzTrip roadmap and will unlock the full potential of this role when released.
+</Info>
